@@ -69,49 +69,32 @@ tailwind.config = {
 </div>
 
 <!-- Sidebar -->
-<aside class="hidden md:flex flex-col h-screen w-64 left-0 sticky bg-surface-container-low border-r border-outline-variant py-6">
-  <div class="px-4 mb-8 flex items-center gap-3">
-    <!-- Logo dB recreado en SVG -->
-    <svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <!-- letra d -->
-      <path d="M6 8 C6 8 6 36 6 36 L14 36 C14 36 22 36 22 28 L22 16 C22 8 14 8 14 8 Z" fill="url(#gd1)" />
-      <path d="M10 14 L14 14 C14 14 17 14 17 17 L17 31 C17 34 14 34 14 34 L10 34 Z" fill="white"/>
-      <!-- letra B -->
-      <path d="M22 8 L22 36 L32 36 C32 36 38 36 38 30 C38 26 36 24 33 23 C36 22 38 20 38 16 C38 10 32 8 32 8 Z" fill="url(#gd2)"/>
-      <path d="M26 12 L31 12 C31 12 34 12 34 16 C34 19 31 20 31 20 L26 20 Z" fill="url(#gd3)" opacity="0.7"/>
-      <path d="M26 23 L32 23 C32 23 34 24 34 28 C34 32 32 32 32 32 L26 32 Z" fill="url(#gd3)" opacity="0.5"/>
-      <defs>
-        <linearGradient id="gd1" x1="6" y1="8" x2="22" y2="36" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stop-color="#1a56c4"/>
-          <stop offset="100%" stop-color="#0d2e8a"/>
-        </linearGradient>
-        <linearGradient id="gd2" x1="22" y1="8" x2="38" y2="36" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stop-color="#1a3fa0"/>
-          <stop offset="100%" stop-color="#4a6fa5"/>
-        </linearGradient>
-        <linearGradient id="gd3" x1="26" y1="8" x2="38" y2="36" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stop-color="#6a8fc8"/>
-          <stop offset="100%" stop-color="#2a4f90"/>
-        </linearGradient>
-      </defs>
-    </svg>
-    <div>
-      <h1 class="text-headline-md font-bold text-primary leading-tight">Control de Pedidos</h1>
-      <p class="text-label-sm text-on-surface-variant opacity-70">Main Hub • Terminal A-12</p>
-    </div>
+<aside class="hidden md:flex flex-col h-screen w-64 left-0 sticky bg-surface-container-low border-r border-outline-variant p-4">
+  <div class="px-4 py-6 mb-4">
+    <h1 class="text-headline-md font-bold text-primary flex items-center gap-2">
+      <span class="material-symbols-outlined">local_shipping</span>Control de Pedidos
+    </h1>
+    <p class="text-label-sm text-on-surface-variant opacity-70 mt-1">271 · Logistics Package List</p>
   </div>
-  <nav class="flex-grow px-2">
-    <a class="flex items-center px-4 py-2 mb-1 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg" href="#">
-      <span class="material-symbols-outlined mr-3">inventory_2</span>
-      <span class="text-label-sm">Bultos</span>
+  <nav class="flex-grow space-y-1 px-2">
+    <a class="flex items-center gap-3 px-3 py-2 bg-primary text-on-primary rounded-lg font-bold transition-all shadow-sm cursor-pointer">
+      <span class="material-symbols-outlined">inventory_2</span>
+      <span class="text-body-md">Bultos</span>
     </a>
-    <a class="flex items-center px-4 py-2 mb-1 text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-all" href="#">
-      <span class="material-symbols-outlined mr-3">assignment_turned_in</span>
-      <span class="text-label-sm">OTIF</span>
+    <a class="flex items-center gap-3 px-3 py-2 text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-all cursor-pointer">
+      <span class="material-symbols-outlined">assignment_turned_in</span>
+      <span class="text-body-md">OTIF</span>
     </a>
   </nav>
-  <div class="px-4 mt-auto pt-4 border-t border-outline-variant">
-    <p class="text-xs text-on-surface-variant opacity-60 text-center">v3.0 • Control Bultos</p>
+  <div class="px-2 pb-2 mt-4">
+    <div class="flex items-center gap-3 p-3 bg-surface-container rounded-xl border border-outline-variant/30">
+      <div class="w-10 h-10 rounded-lg bg-primary flex items-center justify-center text-on-primary font-bold text-sm flex-shrink-0">OB</div>
+      <div class="overflow-hidden">
+        <p class="text-body-sm font-bold truncate text-on-surface">Omar Bernales</p>
+        <p class="text-xs text-on-surface-variant truncate">Odan89</p>
+      </div>
+    </div>
+    <p class="text-xs text-on-surface-variant opacity-60 text-center mt-3">v4.0 • Control Bultos</p>
   </div>
 </aside>
 
@@ -153,11 +136,6 @@ tailwind.config = {
       <!-- Separador -->
       <div class="h-6 w-px bg-outline-variant"></div>
 
-      <button onclick="descargarPlantilla()"
-        class="flex items-center gap-1 px-3 py-1.5 border border-outline-variant rounded-lg text-label-sm hover:bg-surface-container transition-all text-tertiary border-tertiary/40"
-        title="Descargar plantilla XLSX con cabeceras y fila de ejemplo">
-        <span class="material-symbols-outlined text-[18px]">file_download</span>Plantilla
-      </button>
       <button onclick="document.getElementById('importXlsInput').click()"
         class="flex items-center gap-1 px-3 py-1.5 border border-outline-variant rounded-lg text-label-sm hover:bg-surface-container transition-all">
         <span class="material-symbols-outlined text-[18px]">upload</span>Importar XLS
@@ -168,10 +146,6 @@ tailwind.config = {
         <span class="material-symbols-outlined text-[18px]">download</span>Exportar XLS
       </button>
 
-      <!-- Separador -->
-      <div class="h-6 w-px bg-outline-variant"></div>
-
-      <div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container border border-outline-variant text-xs font-bold">U</div>
     </div>
   </header>
 
@@ -180,50 +154,56 @@ tailwind.config = {
     <!-- KPIs -->
     <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
 
-      <!-- 1. TOTAL PEDIDOS -->
-      <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col gap-xs">
-        <span class="text-label-sm text-on-surface-variant uppercase tracking-wider">TOTAL DE PEDIDOS</span>
+      <!-- 1. Total Pedidos → % conformes/total -->
+      <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col gap-1">
+        <span class="text-label-sm text-on-surface-variant uppercase tracking-wider">Total Pedidos</span>
         <span id="kpi-total" class="text-headline-md font-bold text-primary">0</span>
-        <div class="flex items-center text-green-600 text-xs font-bold gap-1 mt-1">
-          <span class="material-symbols-outlined text-[14px]">check_circle</span>
-          <span id="kpi-total-sub">0 conf. / 0 total</span>
+        <div class="flex items-center gap-1 mt-1">
+          <span class="material-symbols-outlined text-[13px] text-green-600">check_circle</span>
+          <span id="kpi-total-sub" class="text-xs font-bold text-green-600">0 conf.</span>
+          <span class="text-xs text-on-surface-variant">/ <span id="kpi-total-gen">0</span> total</span>
         </div>
       </div>
 
-      <!-- 2. TOTAL UNIDADES -->
-      <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col gap-xs">
-        <span class="text-label-sm text-on-surface-variant uppercase tracking-wider">TOTAL DE UNIDADES</span>
+      <!-- 2. Total Unidades → sum total - sum pendientes -->
+      <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col gap-1">
+        <span class="text-label-sm text-on-surface-variant uppercase tracking-wider">Total Unidades</span>
         <span id="kpi-unidades" class="text-headline-md font-bold text-secondary">0</span>
-        <div class="h-1.5 w-full bg-surface-container rounded-full mt-2 overflow-hidden">
-          <div id="kpi-unidades-bar" class="h-full bg-secondary transition-all" style="width:0%"></div>
+        <div class="flex items-center gap-1 mt-1">
+          <span class="material-symbols-outlined text-[13px] text-error">remove_circle</span>
+          <span id="kpi-unidades-pend" class="text-xs font-bold text-error">0</span>
+          <span class="text-xs text-on-surface-variant">und. pendientes</span>
         </div>
-        <div class="text-xs text-on-surface-variant mt-1"><span id="kpi-unidades-pend" class="font-bold text-error">0</span> und. pendientes</div>
       </div>
 
-      <!-- 3. TOTAL BULTOS -->
-      <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col gap-xs">
-        <span class="text-label-sm text-on-surface-variant uppercase tracking-wider">TOTAL DE BULTOS</span>
+      <!-- 3. Total Bultos → sumatoria total -->
+      <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col gap-1">
+        <span class="text-label-sm text-on-surface-variant uppercase tracking-wider">Total Bultos</span>
         <span id="kpi-bultos" class="text-headline-md font-bold text-tertiary">0</span>
-        <div class="flex items-center text-on-surface-variant text-xs mt-1">
-          <span class="material-symbols-outlined text-[14px] mr-1">inventory_2</span>In Warehouse
+        <div class="flex items-center gap-1 mt-1">
+          <span class="material-symbols-outlined text-[13px] text-on-surface-variant">inventory_2</span>
+          <span class="text-xs text-on-surface-variant">sumatoria total de bultos</span>
         </div>
       </div>
 
-      <!-- 4. CONFORMES -->
-      <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col gap-xs">
-        <span class="text-label-sm text-on-surface-variant uppercase tracking-wider">CONFORMES</span>
+      <!-- 4. Conformes → conteo pedidos con status Conforme -->
+      <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col gap-1">
+        <span class="text-label-sm text-on-surface-variant uppercase tracking-wider">Conformes</span>
         <span id="kpi-conformes" class="text-headline-md font-bold text-green-600">0</span>
-        <div class="flex items-center text-green-600 text-xs font-bold gap-1 mt-1">
-          <span class="material-symbols-outlined text-[14px]">check_circle</span>
-          <span id="kpi-conformes-pct">0%</span> pedidos con bultos
+        <div class="flex items-center gap-1 mt-1">
+          <span class="material-symbols-outlined text-[13px] text-green-600">check_circle</span>
+          <span class="text-xs text-on-surface-variant">pedidos con bultos</span>
         </div>
       </div>
 
-      <!-- 5. PENDIENTES -->
-      <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col gap-xs">
-        <span class="text-label-sm text-on-surface-variant uppercase tracking-wider">PENDIENTES</span>
+      <!-- 5. Pendientes → conteo pedidos con status Pendiente -->
+      <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col gap-1">
+        <span class="text-label-sm text-on-surface-variant uppercase tracking-wider">Pendientes</span>
         <span id="kpi-pendientes" class="text-headline-md font-bold text-error">0</span>
-        <div class="bg-error-container text-on-error-container px-2 py-[2px] rounded text-[10px] w-fit font-bold mt-1" id="kpi-pend-badge">SIN BULTOS</div>
+        <div class="flex items-center gap-1 mt-1">
+          <span class="material-symbols-outlined text-[13px] text-error">warning</span>
+          <span class="text-xs text-on-surface-variant">pedidos sin bultos</span>
+        </div>
       </div>
 
     </div>
@@ -238,31 +218,17 @@ tailwind.config = {
           <input id="filterFechaHasta" type="date" onchange="applyFilters()" class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-body-md focus:ring-1 focus:ring-primary">
         </div>
       </div>
-      <div class="flex flex-col gap-1 flex-grow min-w-[140px]">
+      <div class="flex flex-col gap-1 min-w-[130px]">
         <label class="text-label-sm font-bold text-on-surface-variant">BPCS</label>
         <input id="filterBpcs" oninput="applyFilters()" type="text" placeholder="Ej: 967310..." class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-body-md focus:ring-1 focus:ring-primary">
       </div>
-      <div class="flex flex-col gap-1 flex-grow min-w-[140px]">
+      <div class="flex flex-col gap-1 min-w-[130px]">
         <label class="text-label-sm font-bold text-on-surface-variant">Documento</label>
         <input id="filterDoc" oninput="applyFilters()" type="text" placeholder="Ej: 4709456..." class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-body-md focus:ring-1 focus:ring-primary">
       </div>
-      <div class="flex flex-col gap-1">
-        <label class="text-label-sm font-bold text-on-surface-variant">Mes</label>
-        <select id="filterMes" onchange="applyFilters()" class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-body-md focus:ring-1 focus:ring-primary">
-          <option value="">Todos</option>
-          <option value="01">Enero</option>
-          <option value="02">Febrero</option>
-          <option value="03">Marzo</option>
-          <option value="04">Abril</option>
-          <option value="05">Mayo</option>
-          <option value="06">Junio</option>
-          <option value="07">Julio</option>
-          <option value="08">Agosto</option>
-          <option value="09">Septiembre</option>
-          <option value="10">Octubre</option>
-          <option value="11">Noviembre</option>
-          <option value="12">Diciembre</option>
-        </select>
+      <div class="flex flex-col gap-1 min-w-[160px]">
+        <label class="text-label-sm font-bold text-on-surface-variant">Destinatario</label>
+        <input id="filterDest" oninput="applyFilters()" type="text" placeholder="Nombre destinatario..." class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-body-md focus:ring-1 focus:ring-primary">
       </div>
       <div class="flex flex-col gap-1">
         <label class="text-label-sm font-bold text-on-surface-variant">Status</label>
@@ -279,7 +245,7 @@ tailwind.config = {
 
     <!-- Tabla -->
     <div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
-      <div class="overflow-x-auto overflow-y-auto" style="max-height:600px;">
+      <div class="overflow-x-auto overflow-y-auto" style="max-height:420px;min-height:120px;">
         <table class="w-full text-left border-collapse" id="mainTable">
           <thead>
             <tr id="tableHeader" class="bg-tertiary text-on-tertiary sticky-header"></tr>
@@ -329,10 +295,10 @@ tailwind.config = {
 // ─────────────────────────────────────────
 // CONFIG
 // ─────────────────────────────────────────
-const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQgn1Yp4-QseqM82ZqboVRImdNiFIx5kJLfO8ALa5nml7yqKSi9-HCWygRTHW932b7m06Jq2bG09QJA/pub?gid=631088075&single=true&output=csv';
-let ROWS_PER_PAGE = 99999; // Sin paginación — scroll vertical muestra todo
+const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQgn1Yp4-QseqM82ZqboVRImdNiFIx5kJLfO8ALa5nml7yqKSi9-HCWygRTHW932b7m06Jq2bG09QJA/pub?gid=152340750&single=true&output=csv';
+const ROWS_PER_PAGE = 10;
 // Columnas reales del Sheet (orden exacto de la imagen)
-const SHEET_COLS   = ['ID BULTOS','BPCS','DOCUMENTO','DESTINATARIO','FECHA CITA','CANTIDAD','BULTOS','USUARIO','REGISTRO'];
+const SHEET_COLS   = ['ID BULTOS','BPCS','DOCUMENTO','DESTINATARIO','FECHA CITA','CANTIDAD','BULTOS','USUARIO','REGISTRO','MES'];
 // Columna virtual añadida por la app
 const VIRTUAL_STATUS = 'STATUS';
 
@@ -369,69 +335,30 @@ function computeStatus(row){
   return (val && val!=='0' && val!=='') ? 'Conforme' : 'Pendiente';
 }
 
-// MES VIRTUAL: extraído de FECHA CITA (yyyymmdd → nombre del mes)
-const MESES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-function computeMes(row){
-  const iF = columnHeaders.findIndex(h=>isFechaCol(h));
-  if(iF<0) return '';
-  const s = String(row[iF]).replace(/\D/g,'');
-  if(s.length===8){
-    const m = parseInt(s.slice(4,6),10);
-    return MESES[m] || '';
-  }
-  return '';
-}
-
 const STATUS_STYLE = {
   'Conforme' : 'bg-green-100 text-green-800',
   'Pendiente': 'bg-yellow-100 text-yellow-800',
 };
 
 // ─────────────────────────────────────────
-// CARGA AUTOMÁTICA desde Sheet (múltiples proxies)
+// CARGA AUTOMÁTICA desde Sheet
 // ─────────────────────────────────────────
 async function loadSheet(){
   showOverlay(true);
-  document.getElementById('syncTime').textContent = 'Cargando...';
-
-  // Lista de proxies CORS en orden de preferencia
-  const proxies = [
-    url => `https://corsproxy.io/?${encodeURIComponent(url)}`,
-    url => `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`,
-    url => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`,
-  ];
-
-  let csv = null;
-
-  for(const buildProxy of proxies){
-    try{
-      const proxyUrl = buildProxy(SHEET_CSV_URL);
-      const resp = await fetch(proxyUrl, {signal: AbortSignal.timeout(8000)});
-      if(!resp.ok) continue;
-      const text = await resp.text();
-      // allorigins devuelve JSON con .contents, los otros devuelven CSV directo
-      if(text.trim().startsWith('{')){
-        const json = JSON.parse(text);
-        csv = json.contents || json.data || null;
-      } else {
-        csv = text;
-      }
-      if(csv && csv.includes(',')) break; // CSV válido encontrado
-    } catch(e){ continue; }
-  }
-
-  if(csv && csv.trim().length > 0){
-    parseCSV(csv);
+  try{
+    const resp = await fetch(SHEET_CSV_URL);
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const text = await resp.text();
+    parseCSV(text);
     const now = new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
     document.getElementById('syncTime').textContent = `Sync ${now}`;
     showToast(`${allData.length} registros cargados`, 'success');
-  } else {
-    document.getElementById('syncTime').textContent = 'Sin conexión';
-    showToast('No se pudo conectar al Sheet. Usando datos de demo.', 'error');
+  } catch(e){
+    showToast('Error al conectar al Sheet — mostrando datos de demostración', 'error');
     loadDemoData();
+  } finally {
+    showOverlay(false);
   }
-
-  showOverlay(false);
 }
 
 function reloadSheet(){ loadSheet(); }
@@ -478,12 +405,14 @@ function loadDemoData(){
 }
 
 // ─────────────────────────────────────────
-// CORRELATIVO
+// CORRELATIVO — solo rellena si la celda está vacía
 // ─────────────────────────────────────────
 function recalcIds(){
   const idx=columnHeaders.findIndex(h=>/id bultos/i.test(h));
   if(idx<0) return;
-  allData.forEach((row,i)=>{ row[idx]=i+1; });
+  allData.forEach((row,i)=>{
+    if(!row[idx] || String(row[idx]).trim()==='') row[idx]=i+1;
+  });
 }
 
 // ─────────────────────────────────────────
@@ -500,9 +429,8 @@ function renderHeaders(){
   thCb.querySelector('#cbAll').addEventListener('change',e=>toggleAllRows(e.target.checked));
   tr.appendChild(thCb);
 
-  // Columnas del sheet (ID BULTOS oculto visualmente)
+  // Columnas del sheet
   columnHeaders.forEach((h,i)=>{
-    if(/id bultos/i.test(h)) return; // no renderizar esta columna
     const th=document.createElement('th');
     th.className='col-header-cell px-4 py-2 text-label-sm font-label-sm uppercase tracking-wider whitespace-nowrap';
     th.title='Doble clic para editar';
@@ -510,12 +438,6 @@ function renderHeaders(){
     th.addEventListener('dblclick',()=>editHeader(th,i));
     tr.appendChild(th);
   });
-
-  // Columna virtual MES
-  const thM=document.createElement('th');
-  thM.className='px-4 py-2 text-label-sm font-label-sm uppercase tracking-wider whitespace-nowrap';
-  thM.innerHTML='<span class="hl">MES</span>';
-  tr.appendChild(thM);
 
   // Columna virtual STATUS (no editable)
   const thS=document.createElement('th');
@@ -613,95 +535,46 @@ function _doExport(rows, baseName){
 }
 
 // ─────────────────────────────────────────
-// PLANTILLA XLSX
+// FILTROS
 // ─────────────────────────────────────────
-function descargarPlantilla(){
-  // Cabeceras sin ID BULTOS (se genera automáticamente al subir)
-  const heads = ['BPCS','DOCUMENTO','DESTINATARIO','FECHA CITA','CANTIDAD','BULTOS','USUARIO','REGISTRO'];
-
-  // Fila de ejemplo con datos de muestra
-  const ejemplo = [
-    '967310',        // BPCS
-    '4709456',       // DOCUMENTO
-    'IMPORTACIONES GYA S.A.C',  // DESTINATARIO
-    '20260625',      // FECHA CITA (formato yyyymmdd)
-    '36',            // CANTIDAD
-    '3',             // BULTOS (dejar vacío si aún no tiene)
-    'J.PEREZ',       // USUARIO
-    '14:22:01',      // REGISTRO
-  ];
-
-  const ws = XLSX.utils.aoa_to_sheet([heads, ejemplo]);
-
-  // Estilo de anchos de columna
-  ws['!cols'] = [
-    {wch:10}, // BPCS
-    {wch:14}, // DOCUMENTO
-    {wch:30}, // DESTINATARIO
-    {wch:12}, // FECHA CITA
-    {wch:10}, // CANTIDAD
-    {wch:10}, // BULTOS
-    {wch:12}, // USUARIO
-    {wch:12}, // REGISTRO
-  ];
-
-  // Nota al pie en fila 3
-  ws['A3'] = { v: '* FECHA CITA en formato yyyymmdd (ej: 20260625). BULTOS vacío = Pendiente, con valor = Conforme. ID BULTOS se genera automáticamente.', t:'s' };
-  ws['!merges'] = [{ s:{r:2,c:0}, e:{r:2,c:7} }];
-
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Plantilla');
-  XLSX.writeFile(wb, 'plantilla_control_bultos.xlsx');
-  showToast('Plantilla descargada ✓', 'success');
-}
-
-
 function applyFilters(){
-  const g   = document.getElementById('globalSearch').value.toLowerCase();
-  const bpcs= document.getElementById('filterBpcs').value.toLowerCase();
-  const doc = document.getElementById('filterDoc').value.toLowerCase();
-  const sta = document.getElementById('filterStatus').value;
-  const mes = document.getElementById('filterMes').value;          // "06", "07", etc.
-  const from= document.getElementById('filterFechaDesde').value.replace(/-/g,'');
-  const to  = document.getElementById('filterFechaHasta').value.replace(/-/g,'');
+  const g    = document.getElementById('globalSearch').value.toLowerCase();
+  const bpcs = document.getElementById('filterBpcs').value.toLowerCase();
+  const doc  = document.getElementById('filterDoc').value.toLowerCase();
+  const dest = document.getElementById('filterDest').value.toLowerCase();
+  const sta  = document.getElementById('filterStatus').value;
+  const from = document.getElementById('filterFechaDesde').value.replace(/-/g,'');
+  const to   = document.getElementById('filterFechaHasta').value.replace(/-/g,'');
 
-  const iB = columnHeaders.findIndex(h=>/bpcs/i.test(h));
-  const iD = columnHeaders.findIndex(h=>/documento/i.test(h));
-  const iF = columnHeaders.findIndex(h=>isFechaCol(h));
+  const iB  = columnHeaders.findIndex(h=>/bpcs/i.test(h));
+  const iD  = columnHeaders.findIndex(h=>/documento/i.test(h));
+  const iDe = columnHeaders.findIndex(h=>/destinatario/i.test(h));
+  const iF  = columnHeaders.findIndex(h=>isFechaCol(h));
 
-  // ── Filtro para KPIs: SOLO mes y rango de fechas
-  const kpiData = allData.filter(row=>{
-    const rf = iF>=0 ? String(row[iF]).replace(/\D/g,'') : '';
-    if(mes && rf.length===8 && rf.slice(4,6)!==mes) return false;
-    if(from && rf<from) return false;
-    if(to   && rf>to)   return false;
-    return true;
-  });
-
-  // ── Filtro para tabla: todos los filtros
-  filteredData = allData.filter(row=>{
-    const rf = iF>=0 ? String(row[iF]).replace(/\D/g,'') : '';
-    if(g    && !row.join(' ').toLowerCase().includes(g)) return false;
-    if(bpcs && iB>=0 && !String(row[iB]).toLowerCase().includes(bpcs)) return false;
-    if(doc  && iD>=0 && !String(row[iD]).toLowerCase().includes(doc))  return false;
-    if(sta  && computeStatus(row)!==sta) return false;
-    if(mes  && rf.length===8 && rf.slice(4,6)!==mes) return false;
-    if(from && rf<from) return false;
-    if(to   && rf>to)   return false;
+  filteredData=allData.filter(row=>{
+    if(g    && !row.join(' ').toLowerCase().includes(g))                         return false;
+    if(bpcs && iB>=0  && !String(row[iB]).toLowerCase().includes(bpcs))         return false;
+    if(doc  && iD>=0  && !String(row[iD]).toLowerCase().includes(doc))           return false;
+    if(dest && iDe>=0 && !String(row[iDe]).toLowerCase().includes(dest))         return false;
+    if(sta  && computeStatus(row)!==sta)                                          return false;
+    if((from||to) && iF>=0){
+      const rf=String(row[iF]).replace(/\D/g,'');
+      if(from && rf<from) return false;
+      if(to   && rf>to)   return false;
+    }
     return true;
   });
 
   currentPage=1;
-  updateKPIs(kpiData);   // KPIs solo reaccionan a mes/fecha
+  updateKPIs();
   renderTable();
   renderPagination();
   updateSelUI();
 }
 
 function clearFilters(){
-  ['globalSearch','filterBpcs','filterDoc'].forEach(id=>document.getElementById(id).value='');
+  ['globalSearch','filterBpcs','filterDoc','filterDest'].forEach(id=>document.getElementById(id).value='');
   document.getElementById('filterStatus').value='';
-  document.getElementById('filterMes').value='';
   document.getElementById('filterFechaDesde').value='';
   document.getElementById('filterFechaHasta').value='';
   applyFilters();
@@ -710,43 +583,42 @@ function clearFilters(){
 // ─────────────────────────────────────────
 // KPIs
 // ─────────────────────────────────────────
-function updateKPIs(data){
-  // data = subconjunto filtrado SOLO por mes/fecha (para KPIs)
-  // si no se pasa, usar allData (estado inicial)
-  const d = data || allData;
-
+function updateKPIs(){
   const iC = columnHeaders.findIndex(h=>/cantidad/i.test(h));
   const iB = columnHeaders.findIndex(h=>/^bultos$/i.test(h));
 
-  const total      = d.length;
-  const conformes  = d.filter(r=>computeStatus(r)==='Conforme').length;
-  const pendientes = d.filter(r=>computeStatus(r)==='Pendiente').length;
-  const pctConf    = total ? Math.round(conformes/total*100) : 0;
+  // Totales sobre datos filtrados
+  const total      = filteredData.length;
+  const conformes  = filteredData.filter(r=>computeStatus(r)==='Conforme').length;
+  const pendientes = filteredData.filter(r=>computeStatus(r)==='Pendiente').length;
 
-  const unidadesTotal = d.reduce((s,r)=>s+(parseFloat(r[iC])||0),0);
-  const unidadesPend  = d.filter(r=>computeStatus(r)==='Pendiente')
-                         .reduce((s,r)=>s+(parseFloat(r[iC])||0),0);
-  const barPct = unidadesTotal>0 ? Math.round((unidadesTotal-unidadesPend)/unidadesTotal*100) : 0;
-  const bultosTotal = d.reduce((s,r)=>s+(parseFloat(r[iB])||0),0);
+  // Sumatoria total de unidades
+  const unidadesTotal = filteredData.reduce((s,r)=>s+(parseFloat(r[iC])||0), 0);
+  // Sumatoria de unidades solo de filas Pendiente
+  const unidadesPend  = filteredData
+    .filter(r=>computeStatus(r)==='Pendiente')
+    .reduce((s,r)=>s+(parseFloat(r[iC])||0), 0);
 
-  document.getElementById('kpi-total').textContent      = total.toLocaleString('es-PE');
-  document.getElementById('kpi-total-sub').textContent  = `${conformes.toLocaleString('es-PE')} conf. / ${total.toLocaleString('es-PE')} total`;
+  // Sumatoria total de bultos
+  const bultosTotal = filteredData.reduce((s,r)=>s+(parseFloat(r[iB])||0), 0);
 
-  document.getElementById('kpi-unidades').textContent       = unidadesTotal.toLocaleString('es-PE');
-  document.getElementById('kpi-unidades-bar').style.width   = barPct+'%';
-  document.getElementById('kpi-unidades-pend').textContent  = unidadesPend.toLocaleString('es-PE');
+  // ── KPI 1: Total Pedidos — subtext: conformes / total general
+  document.getElementById('kpi-total').textContent    = total.toLocaleString('es-PE');
+  document.getElementById('kpi-total-sub').textContent= conformes.toLocaleString('es-PE')+' conf.';
+  document.getElementById('kpi-total-gen').textContent= total.toLocaleString('es-PE');
 
+  // ── KPI 2: Total Unidades — subtext: unidades de pendientes
+  document.getElementById('kpi-unidades').textContent     = unidadesTotal.toLocaleString('es-PE');
+  document.getElementById('kpi-unidades-pend').textContent= unidadesPend.toLocaleString('es-PE');
+
+  // ── KPI 3: Total Bultos — sumatoria total
   document.getElementById('kpi-bultos').textContent = bultosTotal.toLocaleString('es-PE');
 
-  document.getElementById('kpi-conformes').textContent     = conformes.toLocaleString('es-PE');
-  document.getElementById('kpi-conformes-pct').textContent = pctConf+'%';
+  // ── KPI 4: Conformes — conteo pedidos con bultos
+  document.getElementById('kpi-conformes').textContent = conformes.toLocaleString('es-PE');
 
+  // ── KPI 5: Pendientes — conteo pedidos sin bultos
   document.getElementById('kpi-pendientes').textContent = pendientes.toLocaleString('es-PE');
-  const badge = document.getElementById('kpi-pend-badge');
-  badge.textContent = pendientes>0 ? 'SIN BULTOS' : 'AL DÍA';
-  badge.className   = pendientes>0
-    ? 'bg-error-container text-on-error-container px-2 py-[2px] rounded text-[10px] w-fit font-bold mt-1'
-    : 'bg-green-100 text-green-800 px-2 py-[2px] rounded text-[10px] w-fit font-bold mt-1';
 }
 
 // ─────────────────────────────────────────
@@ -787,12 +659,14 @@ function renderTable(){
     tdCb.appendChild(cb);
     tr.appendChild(tdCb);
 
-    // Celdas de datos (ID BULTOS oculto visualmente, existe en datos)
+    // Celdas de datos
     row.forEach((cell,ci)=>{
       const td=document.createElement('td');
 
       if(ci===iId){
-        return; // saltar — no renderizar la celda ID BULTOS
+        td.className='px-4 py-3 font-data-display text-primary font-bold';
+        td.textContent=cell;
+        tr.appendChild(td); return;
       }
       if(isFechaCol(columnHeaders[ci])){
         td.className='px-4 py-3 editable-cell font-data-display text-on-surface-variant';
@@ -805,12 +679,6 @@ function renderTable(){
       td.addEventListener('dblclick',()=>editCell(td,row,ci,false));
       tr.appendChild(td);
     });
-
-    // Columna virtual MES
-    const tdM=document.createElement('td');
-    tdM.className='px-4 py-3 text-on-surface-variant text-xs font-bold';
-    tdM.textContent=computeMes(row)||'—';
-    tr.appendChild(tdM);
 
     // Columna virtual STATUS
     const tdS=document.createElement('td');
