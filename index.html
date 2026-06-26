@@ -7,7 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script id="tailwind-config">
 tailwind.config = {
   darkMode:"class",
@@ -138,12 +138,12 @@ tailwind.config = {
 
       <button onclick="document.getElementById('importXlsInput').click()"
         class="flex items-center gap-1 px-3 py-1.5 border border-outline-variant rounded-lg text-label-sm hover:bg-surface-container transition-all">
-        <span class="material-symbols-outlined text-[18px]">upload</span>Importar XLS
+        <span class="material-symbols-outlined text-[18px]">upload</span>Subir XLS
       </button>
-      <input id="importXlsInput" type="file" accept=".xls,.xlsx" class="hidden" onchange="importFromXLS(event)">
+      <input id="importXlsInput" type="file" accept=".xls,.xlsx,.xlsb,.xlsm" class="hidden" onchange="importFromXLS(event)">
       <button onclick="exportToXLS()"
         class="flex items-center gap-1 px-3 py-1.5 border border-outline-variant rounded-lg text-label-sm hover:bg-surface-container transition-all">
-        <span class="material-symbols-outlined text-[18px]">download</span>Exportar XLS
+        <span class="material-symbols-outlined text-[18px]">download</span>Descargar XLS
       </button>
 
     </div>
@@ -295,10 +295,10 @@ tailwind.config = {
     <span class="text-[10px]">Bultos</span>
   </a>
   <button onclick="document.getElementById('importXlsInput').click()" class="flex flex-col items-center gap-1 text-on-surface-variant">
-    <span class="material-symbols-outlined">upload</span><span class="text-[10px]">Importar</span>
+    <span class="material-symbols-outlined">upload</span><span class="text-[10px]">Subir</span>
   </button>
   <button onclick="exportToXLS()" class="flex flex-col items-center gap-1 text-on-surface-variant">
-    <span class="material-symbols-outlined">download</span><span class="text-[10px]">Exportar</span>
+    <span class="material-symbols-outlined">download</span><span class="text-[10px]">Descargar</span>
   </button>
   <button onclick="reloadSheet()" class="flex flex-col items-center gap-1 text-on-surface-variant">
     <span class="material-symbols-outlined">refresh</span><span class="text-[10px]">Sync</span>
@@ -502,39 +502,90 @@ function editHeader(th,idx){
 }
 
 // ─────────────────────────────────────────
-// IMPORTAR XLS
+// IMPORTAR XLS / XLSX (ambos formatos)
 // ─────────────────────────────────────────
 function importFromXLS(event){
-  const file=event.target.files[0]; if(!file) return;
-  showToast('Leyendo XLS...','info');
-  const reader=new FileReader();
-  reader.onload=e=>{
+  const file = event.target.files[0];
+  if(!file) return;
+  showToast('Leyendo archivo...', 'info');
+
+  const reader = new FileReader();
+  reader.onload = function(e){
     try{
-      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
-      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
-      if(rows.length<2){showToast('Archivo vacío','error');return;}
-      // Ignorar columna STATUS si viene en el XLS (es virtual)
-      let heads=rows[0].map(h=>String(h).trim());
-      const statusColIdx=heads.findIndex(h=>/^status$/i.test(h));
-      if(statusColIdx>=0) heads.splice(statusColIdx,1);
-      columnHeaders=heads;
-      allData=rows.slice(1).filter(r=>r.some(c=>String(c).trim())).map(r=>{
-        let cells=heads.map((_,i)=>String(r[i]??'').trim());
-        return cells;
-      });
-      recalcIds(); selectedRows.clear(); applyFilters();
-      showToast(`${allData.length} registros importados de "${file.name}"`, 'success');
-    }catch(err){showToast('Error XLS: '+err.message,'error');}
+      // Leer el workbook — funciona con .xls (BIFF5/BIFF8) y .xlsx
+      const data = new Uint8Array(e.target.result);
+      const wb   = XLSX.read(data, { type:'array', cellDates:false, raw:false });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', blankrows:false });
+
+      if(!rows || rows.length < 2){
+        showToast('El archivo está vacío o no tiene datos', 'error');
+        event.target.value = '';
+        return;
+      }
+
+      // Cabeceras del archivo importado (fila 1)
+      const fileHeads = rows[0].map(h => String(h ?? '').trim());
+
+      // Columnas virtuales a ignorar al importar
+      const IGNORAR = /^(status|mes)$/i;
+
+      // Filtrar cabeceras válidas (no vacías, no virtuales)
+      const validCols = fileHeads
+        .map((h, i) => ({ h, i }))
+        .filter(({h}) => h && !IGNORAR.test(h));
+
+      if(validCols.length === 0){
+        showToast('No se encontraron columnas válidas', 'error');
+        event.target.value = '';
+        return;
+      }
+
+      // Reconstruir allData mapeando solo columnas válidas, en el orden del Sheet esperado
+      const expectedOrder = [...SHEET_COLS]; // ['ID BULTOS','BPCS','DOCUMENTO',...]
+      columnHeaders = expectedOrder;
+
+      const newData = rows.slice(1)
+        .filter(r => r.some(c => String(c ?? '').trim() !== ''))
+        .map(r => {
+          return expectedOrder.map(col => {
+            const srcIdx = fileHeads.findIndex(h => h.toUpperCase() === col.toUpperCase());
+            return srcIdx >= 0 ? String(r[srcIdx] ?? '').trim() : '';
+          });
+        });
+
+      if(newData.length === 0){
+        showToast('El archivo no tiene filas con datos', 'error');
+        event.target.value = '';
+        return;
+      }
+
+      allData = newData;
+      recalcIds();
+      selectedRows.clear();
+      applyFilters();
+      showToast(`✓ ${allData.length} registros importados de "${file.name}"`, 'success');
+    } catch(err){
+      showToast('Error al leer el archivo: ' + err.message, 'error');
+      console.error(err);
+    }
+    // Reset input DESPUÉS de procesar
+    event.target.value = '';
   };
+
+  reader.onerror = function(){
+    showToast('No se pudo leer el archivo', 'error');
+    event.target.value = '';
+  };
+
   reader.readAsArrayBuffer(file);
-  event.target.value='';
 }
 
 // ─────────────────────────────────────────
-// EXPORTAR XLS (todos)
+// EXPORTAR XLS — todos los registros
 // ─────────────────────────────────────────
 function exportToXLS(){
-  if(!allData.length){showToast('Sin datos para exportar','error');return;}
+  if(!allData.length){ showToast('Sin datos para exportar', 'error'); return; }
   _doExport(allData, 'control_bultos');
 }
 
@@ -542,32 +593,61 @@ function exportToXLS(){
 // EXPORTAR SELECCIONADOS
 // ─────────────────────────────────────────
 function exportSelected(){
-  if(!selectedRows.size){showToast('Selecciona al menos una fila','error');return;}
-  const rows=[...selectedRows].map(i=>allData[i]);
-  _doExport(rows,'control_bultos_seleccion');
+  if(!selectedRows.size){ showToast('Selecciona al menos una fila', 'error'); return; }
+  const rows = [...selectedRows].map(i => allData[i]);
+  _doExport(rows, 'control_bultos_seleccion');
 }
 
+// ─────────────────────────────────────────
+// _doExport — núcleo de exportación
+// ─────────────────────────────────────────
 function _doExport(rows, baseName){
-  // Incluir STATUS virtual en el XLS
-  const heads=[...columnHeaders, VIRTUAL_STATUS];
-  const exportRows=[heads, ...rows.map(row=>{
-    const cells=row.map((cell,i)=>{
-      if(isFechaCol(columnHeaders[i])){
-        const m=String(cell).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-        return m?`${m[3]}${m[2]}${m[1]}`:cell;
-      }
-      return cell;
+  try{
+    const iF = columnHeaders.findIndex(h => isFechaCol(h));
+
+    // Cabeceras: columnas del sheet (sin ID BULTOS oculto en vista, pero sí en export) + MES + STATUS
+    const heads = [...columnHeaders, 'MES', VIRTUAL_STATUS];
+
+    const exportRows = [
+      heads,
+      ...rows.map(row => {
+        const cells = row.map((cell, i) => {
+          // Fechas: devolver como string YYYYMMDD para evitar que Excel las reinterprete
+          if(isFechaCol(columnHeaders[i])){
+            return String(cell).replace(/\D/g,'').slice(0,8) || cell;
+          }
+          // Números: intentar convertir
+          const n = parseFloat(cell);
+          return (!isNaN(n) && cell !== '') ? n : (cell || '');
+        });
+        // Columna virtual MES
+        cells.push(iF >= 0 ? getMesLabel(row[iF]) : '');
+        // Columna virtual STATUS
+        cells.push(computeStatus(row));
+        return cells;
+      })
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(exportRows);
+
+    // Ancho de columnas
+    ws['!cols'] = heads.map((h, i) => {
+      if(/destinatario/i.test(h)) return { wch: 35 };
+      if(/documento/i.test(h))    return { wch: 18 };
+      return { wch: 14 };
     });
-    cells.push(computeStatus(row)); // añadir STATUS
-    return cells;
-  })];
-  const ws=XLSX.utils.aoa_to_sheet(exportRows);
-  ws['!cols']=heads.map(()=>({wch:18}));
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Bultos');
-  const d=new Date().toISOString().slice(0,10).replace(/-/g,'');
-  XLSX.writeFile(wb,`${baseName}_${d}.xlsx`);
-  showToast('Archivo descargado ✓','success');
+
+    // Estilo de cabecera (solo disponible en SheetJS Pro, pero no rompe en Community)
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Bultos');
+
+    const d = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    XLSX.writeFile(wb, `${baseName}_${d}.xlsx`, { compression: true });
+    showToast('✓ Archivo descargado', 'success');
+  } catch(err){
+    showToast('Error al exportar: ' + err.message, 'error');
+    console.error(err);
+  }
 }
 
 // ─────────────────────────────────────────
