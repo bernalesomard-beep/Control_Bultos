@@ -985,48 +985,25 @@ function showToast(msg,type='info'){
 
 // ─────────────────────────────────────────
 // SINCRONIZACIÓN CON APPS SCRIPT
-// Usa un formulario oculto para evitar bloqueos CORS/file://
+// Desde HTTPS (GitHub Pages) el fetch funciona con no-cors.
+// El dato llega al servidor aunque no podamos leer la respuesta.
 // ─────────────────────────────────────────
-function postToSheet(action, data, callback){
+async function postToSheet(action, data, callback){
   if(!WEBAPP_URL){
     if(callback) callback(false, null);
     return;
   }
   try{
     const payload = JSON.stringify({ action, ...data });
-
-    // Crear iframe oculto para recibir la respuesta del form
-    const iframeId = 'gs_iframe_' + Date.now();
-    const iframe   = document.createElement('iframe');
-    iframe.name    = iframeId;
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-
-    // Crear formulario oculto que apunta al iframe
-    const form        = document.createElement('form');
-    form.method       = 'POST';
-    form.action       = WEBAPP_URL;
-    form.target       = iframeId;
-    form.style.display = 'none';
-
-    const input       = document.createElement('input');
-    input.type        = 'hidden';
-    input.name        = 'payload';
-    input.value       = payload;
-    form.appendChild(input);
-    document.body.appendChild(form);
-
-    iframe.onload = () => {
-      setTimeout(()=>{
-        document.body.removeChild(form);
-        document.body.removeChild(iframe);
-      }, 1000);
-      if(callback) callback(true, null);
-    };
-
-    form.submit();
+    await fetch(WEBAPP_URL, {
+      method : 'POST',
+      mode   : 'no-cors',
+      body   : payload
+    });
+    if(callback) callback(true, null);
   } catch(err){
     console.warn('[Sheet sync] Error:', err.message);
+    showToast('Error al sincronizar: ' + err.message, 'error');
     if(callback) callback(false, null);
   }
 }
