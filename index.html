@@ -141,6 +141,10 @@ tailwind.config = {
         <span class="material-symbols-outlined text-[18px]">upload</span>Subir XLS
       </button>
       <input id="importXlsInput" type="file" accept=".xls,.xlsx,.xlsb,.xlsm" class="hidden" onchange="importFromXLS(event)">
+      <button onclick="downloadTemplate()" title="Descargar plantilla vacía para subir datos"
+        class="flex items-center gap-1 px-3 py-1.5 border border-outline-variant rounded-lg text-label-sm hover:bg-surface-container transition-all text-primary border-primary/40">
+        <span class="material-symbols-outlined text-[18px]">table_view</span>Plantilla
+      </button>
       <button onclick="exportToXLS()"
         class="flex items-center gap-1 px-3 py-1.5 border border-outline-variant rounded-lg text-label-sm hover:bg-surface-container transition-all">
         <span class="material-symbols-outlined text-[18px]">download</span>Descargar XLS
@@ -651,8 +655,38 @@ function _doExport(rows, baseName){
 }
 
 // ─────────────────────────────────────────
-// FILTROS
+// DESCARGAR PLANTILLA
 // ─────────────────────────────────────────
+function downloadTemplate(){
+  try{
+    // Columnas de la plantilla (sin ID BULTOS que es autogenerado)
+    const templateCols = ['BPCS','DOCUMENTO','DESTINATARIO','FECHA CITA','CANTIDAD','BULTOS','USUARIO','REGISTRO'];
+    const exampleRow   = ['967310','4709456','IMPORTACIONES GYA S.A.C','20260625','36','3','J.PEREZ','14:22:01'];
+
+    const ws = XLSX.utils.aoa_to_sheet([templateCols, exampleRow]);
+
+    // Ancho de columnas
+    ws['!cols'] = templateCols.map(h=>{
+      if(/destinatario/i.test(h)) return {wch:35};
+      if(/documento/i.test(h))    return {wch:18};
+      return {wch:16};
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Plantilla');
+    XLSX.writeFile(wb, 'plantilla_control_bultos.xlsx', {compression:true});
+    showToast('✓ Plantilla descargada', 'success');
+  } catch(err){
+    showToast('Error al generar plantilla: '+err.message, 'error');
+  }
+}
+
+
+// Status, Destinatario, Documento y BPCS solo filtran la TABLA,
+// NO los KPIs/gráficos (chartData).
+// ─────────────────────────────────────────
+let chartData = [];
+
 function applyFilters(){
   const g    = document.getElementById('globalSearch').value.toLowerCase();
   const bpcs = document.getElementById('filterBpcs').value.toLowerCase();
@@ -668,18 +702,24 @@ function applyFilters(){
   const iDe = columnHeaders.findIndex(h=>/destinatario/i.test(h));
   const iF  = columnHeaders.findIndex(h=>isFechaCol(h));
 
-  filteredData=allData.filter(row=>{
-    if(g    && !row.join(' ').toLowerCase().includes(g))                 return false;
-    if(bpcs && iB>=0  && !String(row[iB]).toLowerCase().includes(bpcs)) return false;
-    if(doc  && iD>=0  && !String(row[iD]).toLowerCase().includes(doc))   return false;
-    if(dest && iDe>=0 && !String(row[iDe]).toLowerCase().includes(dest)) return false;
-    if(sta  && computeStatus(row)!==sta)                                  return false;
-    if(mes  && iF>=0  && getMesFromFecha(row[iF])!==parseInt(mes,10))    return false;
+  // chartData: SOLO filtros de Mes y Rango de Fechas → alimenta KPIs
+  chartData = allData.filter(row=>{
+    if(mes && iF>=0 && getMesFromFecha(row[iF])!==parseInt(mes,10))     return false;
     if((from||to) && iF>=0){
       const rf=String(row[iF]).replace(/\D/g,'');
       if(from && rf<from) return false;
       if(to   && rf>to)   return false;
     }
+    return true;
+  });
+
+  // filteredData: chartData + todos los demás filtros (tabla detalle)
+  filteredData = chartData.filter(row=>{
+    if(g && !row.join(' ').toLowerCase().includes(g))                    return false;
+    if(bpcs && iB>=0  && !String(row[iB]).toLowerCase().includes(bpcs)) return false;
+    if(doc  && iD>=0  && !String(row[iD]).toLowerCase().includes(doc))   return false;
+    if(dest && iDe>=0 && !String(row[iDe]).toLowerCase().includes(dest)) return false;
+    if(sta  && computeStatus(row)!==sta)                                  return false;
     return true;
   });
 
@@ -704,20 +744,17 @@ function updateKPIs(){
   const iC = columnHeaders.findIndex(h=>/cantidad/i.test(h));
   const iB = columnHeaders.findIndex(h=>/^bultos$/i.test(h));
 
-  // Totales sobre datos filtrados
-  const total      = filteredData.length;
-  const conformes  = filteredData.filter(r=>computeStatus(r)==='Conforme').length;
-  const pendientes = filteredData.filter(r=>computeStatus(r)==='Pendiente').length;
+  // KPIs siempre sobre chartData (no se ven afectados por Status, BPCS, Doc, Destinatario)
+  const total      = chartData.length;
+  const conformes  = chartData.filter(r=>computeStatus(r)==='Conforme').length;
+  const pendientes = chartData.filter(r=>computeStatus(r)==='Pendiente').length;
 
-  // Sumatoria total de unidades
-  const unidadesTotal = filteredData.reduce((s,r)=>s+(parseFloat(r[iC])||0), 0);
-  // Sumatoria de unidades solo de filas Pendiente
-  const unidadesPend  = filteredData
+  const unidadesTotal = chartData.reduce((s,r)=>s+(parseFloat(r[iC])||0), 0);
+  const unidadesPend  = chartData
     .filter(r=>computeStatus(r)==='Pendiente')
     .reduce((s,r)=>s+(parseFloat(r[iC])||0), 0);
 
-  // Sumatoria total de bultos
-  const bultosTotal = filteredData.reduce((s,r)=>s+(parseFloat(r[iB])||0), 0);
+  const bultosTotal = chartData.reduce((s,r)=>s+(parseFloat(r[iB])||0), 0);
 
   // ── KPI 1: Total Pedidos — subtext: conformes / total general
   document.getElementById('kpi-total').textContent    = total.toLocaleString('es-PE');
