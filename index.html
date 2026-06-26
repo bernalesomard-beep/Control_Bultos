@@ -383,17 +383,14 @@ const STATUS_STYLE = {
 // ─────────────────────────────────────────
 async function loadSheet(){
   showOverlay(true);
-
-  // Intentos en orden: directo → proxy corsproxy.io → proxy allorigins
   const attempts = [
-    { label: 'directo',      url: SHEET_CSV_URL + '&cachebust=' + Date.now() },
-    { label: 'proxy-1',      url: 'https://corsproxy.io/?' + encodeURIComponent(SHEET_CSV_URL) },
-    { label: 'proxy-2',      url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent(SHEET_CSV_URL) }
+    SHEET_CSV_URL + '&cachebust=' + Date.now(),
+    'https://corsproxy.io/?' + encodeURIComponent(SHEET_CSV_URL),
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(SHEET_CSV_URL)
   ];
-
-  for(const attempt of attempts){
+  for(const url of attempts){
     try{
-      const resp = await fetch(attempt.url, { cache: 'no-store' });
+      const resp = await fetch(url, { cache: 'no-store' });
       if(!resp.ok) throw new Error('HTTP ' + resp.status);
       const text = await resp.text();
       if(!text || text.trim().length < 10) throw new Error('Respuesta vacía');
@@ -404,12 +401,10 @@ async function loadSheet(){
       showOverlay(false);
       return;
     } catch(e){
-      console.warn(`[loadSheet] Intento ${attempt.label} falló:`, e.message);
+      console.warn('[loadSheet] Falló intento:', url, e.message);
     }
   }
-
-  // Todos los intentos fallaron
-  showToast('No se pudo conectar al Sheet — revisa que esté publicado como CSV', 'error');
+  showToast('No se pudo conectar al Sheet — verifica que esté publicado como CSV', 'error');
   loadDemoData();
   showOverlay(false);
 }
@@ -625,22 +620,17 @@ function importFromXLS(event){
       applyFilters();
       showToast(`✓ ${insertados} nuevos, ${actualizados} actualizados`, 'success');
 
-      // ── PASO 4: Enviar TODO al Sheet vía POST (upsert por fila) ──
+      // ── PASO 4: Enviar TODO al Sheet vía POST (no-cors: no podemos leer respuesta pero llega al servidor) ──
       if(WEBAPP_URL){
         showToast('Sincronizando con el Sheet...', 'info');
         try{
           const body = JSON.stringify({ action: 'bulkImport', rows: allData });
-          const resp = await fetch(WEBAPP_URL, {
+          await fetch(WEBAPP_URL, {
             method : 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            mode   : 'no-cors',
             body
           });
-          const json = await resp.json();
-          if(json.ok){
-            showToast(`✓ Sheet actualizado: ${json.inserted||0} nuevos, ${json.updated||0} actualizados`, 'success');
-          } else {
-            showToast('Error al guardar en Sheet: ' + (json.error||''), 'error');
-          }
+          showToast('✓ Datos enviados al Sheet', 'success');
         } catch(postErr){
           showToast('Error de red al sincronizar: ' + postErr.message, 'error');
         }
