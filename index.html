@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html class="light" lang="es">
+<head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>Control de Pedidos - 271 - Logistics Package List</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script id="tailwind-config">
+tailwind.config = {
+  darkMode:"class",
+  theme:{extend:{
+    colors:{
+      "primary":"#4e4dbe","on-background":"#191c1e","error":"#ba1a1a","outline":"#777584",
+      "secondary-fixed":"#e0e0f9","on-secondary":"#ffffff","surface-container-high":"#e7e8eb",
+      "surface":"#f8f9fc","inverse-surface":"#2e3133","on-secondary-container":"#616378",
+      "on-error":"#ffffff","surface-dim":"#d9dadd","on-secondary-fixed-variant":"#444559",
+      "tertiary-container":"#7070a2","on-primary":"#ffffff","on-surface":"#191c1e",
+      "secondary-fixed-dim":"#c4c5dd","surface-container":"#edeef1","on-surface-variant":"#464553",
+      "background":"#f8f9fc","surface-container-low":"#f2f3f6","outline-variant":"#c7c5d5",
+      "on-error-container":"#93000a","error-container":"#ffdad6","inverse-primary":"#c2c1ff",
+      "on-tertiary":"#ffffff","primary-fixed":"#e2dfff","tertiary":"#575788",
+      "secondary-container":"#e0e0f9","secondary":"#5b5d72","primary-container":"#6767d9",
+      "inverse-on-surface":"#f0f1f4","surface-variant":"#e1e2e5","surface-container-lowest":"#ffffff",
+      "on-secondary-fixed":"#181a2c"
+    },
+    borderRadius:{DEFAULT:"0.125rem",lg:"0.25rem",xl:"0.5rem",full:"0.75rem"},
+    fontFamily:{"body-lg":["IBM Plex Sans"],"label-sm":["JetBrains Mono"],"headline-lg":["IBM Plex Sans"],"headline-md":["IBM Plex Sans"],"data-display":["JetBrains Mono"],"body-md":["IBM Plex Sans"]},
+    fontSize:{
+      "body-lg":["16px",{"lineHeight":"24px","fontWeight":"400"}],
+      "label-sm":["12px",{"lineHeight":"16px","letterSpacing":"0.05em","fontWeight":"500"}],
+      "headline-lg":["28px",{"lineHeight":"36px","fontWeight":"600"}],
+      "headline-md":["22px",{"lineHeight":"28px","fontWeight":"600"}],
+      "data-display":["18px",{"lineHeight":"24px","fontWeight":"600"}],
+      "body-md":["14px",{"lineHeight":"20px","fontWeight":"400"}]
+    }
+  }}
+}
+</script>
+<style>
+  .material-symbols-outlined{font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;vertical-align:middle}
+  .zebra-row:nth-child(even){background-color:#e0e0f933}
+  .sticky-header{position:sticky;top:0;z-index:10}
+  .editable-cell{cursor:pointer}
+  .editable-cell:hover{background-color:rgba(78,77,190,0.06)}
+  .editable-cell input{width:100%;background:transparent;border:none;outline:2px solid #4e4dbe;border-radius:2px;padding:2px 4px;font-family:'JetBrains Mono',monospace;font-size:13px}
+  .col-header-cell{cursor:pointer;user-select:none}
+  .col-header-cell:hover{background-color:rgba(255,255,255,0.15)}
+  .col-header-cell input{background:transparent;border:none;border-bottom:2px solid #fff;color:#fff;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.05em;font-weight:600;text-transform:uppercase;width:100%;outline:none}
+  .toast{position:fixed;bottom:80px;right:24px;z-index:9999;padding:12px 20px;border-radius:8px;font-weight:600;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,0.15);transform:translateY(20px);opacity:0;transition:all 0.3s ease}
+  .toast.show{transform:translateY(0);opacity:1}
+  .row-selected{background-color:rgba(78,77,190,0.08)!important;outline:1px solid rgba(78,77,190,0.3)}
+  .cb-row{width:16px;height:16px;accent-color:#4e4dbe;cursor:pointer}
+  #exportSelBtn{display:none}
+  #exportSelBtn.visible{display:flex}
+  .loading-overlay{position:fixed;inset:0;background:rgba(248,249,252,0.85);z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+  .spinner{width:40px;height:40px;border:4px solid #c7c5d5;border-top-color:#4e4dbe;border-radius:50%;animation:spin 0.8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body class="bg-background text-on-background font-body-md min-h-screen flex flex-col md:flex-row">
+
+<!-- Loading overlay -->
+<div id="loadingOverlay" class="loading-overlay">
+  <div class="spinner"></div>
+  <p class="text-label-sm text-on-surface-variant font-bold tracking-wider uppercase">Cargando datos...</p>
+</div>
+
+<!-- Sidebar -->
+<aside class="hidden md:flex flex-col h-screen w-64 left-0 sticky bg-surface-container-low border-r border-outline-variant py-6">
+  <div class="px-4 mb-8">
+    <h1 class="text-headline-md font-bold text-primary">Control de Pedidos</h1>
+    <p class="text-label-sm text-on-surface-variant opacity-70 mt-1">Main Hub • Terminal A-12</p>
+  </div>
+  <nav class="flex-grow px-2">
+    <a class="flex items-center px-4 py-2 mb-1 bg-secondary-fixed text-on-secondary-fixed font-bold rounded-lg" href="#">
+      <span class="material-symbols-outlined mr-3">inventory_2</span>
+      <span class="text-label-sm">Bultos</span>
+    </a>
+    <a class="flex items-center px-4 py-2 mb-1 text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-all" href="#">
+      <span class="material-symbols-outlined mr-3">assignment_turned_in</span>
+      <span class="text-label-sm">OTIF</span>
+    </a>
+  </nav>
+  <div class="px-4 mt-auto pt-4 border-t border-outline-variant">
+    <p class="text-xs text-on-surface-variant opacity-60 text-center">v3.0 • Control Bultos</p>
+  </div>
+</aside>
+
+<!-- Main -->
+<main class="flex-grow flex flex-col">
+  <!-- Header -->
+  <header class="flex justify-between items-center w-full px-6 h-16 z-40 bg-surface border-b border-outline-variant top-0 sticky">
+    <div class="flex items-center gap-4">
+      <button class="md:hidden p-1"><span class="material-symbols-outlined">menu</span></button>
+      <div class="relative">
+        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-outline">
+          <span class="material-symbols-outlined text-[20px]">search</span>
+        </span>
+        <input id="globalSearch" oninput="applyFilters()" type="text" placeholder="Buscar BPCS, Documento, Destinatario..."
+          class="bg-surface-container-lowest border border-outline-variant rounded-lg pl-10 pr-4 py-1.5 text-body-md focus:ring-1 focus:ring-primary w-64 md:w-80">
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <!-- Exportar seleccionados (aparece solo cuando hay selección) -->
+      <button id="exportSelBtn" onclick="exportSelected()"
+        class="items-center gap-1 px-3 py-1.5 bg-primary text-on-primary rounded-lg text-label-sm font-bold hover:opacity-90 transition-all">
+        <span class="material-symbols-outlined text-[16px]">download</span>
+        Exportar selec. (<span id="selCount">0</span>)
+      </button>
+
+      <!-- Separador -->
+      <div class="h-6 w-px bg-outline-variant"></div>
+
+      <!-- Sync info + Actualizar -->
+      <div class="flex items-center gap-1 text-xs text-on-surface-variant">
+        <span class="material-symbols-outlined text-[14px]">schedule</span>
+        <span id="syncTime">Sin sync</span>
+      </div>
+      <button onclick="reloadSheet()" title="Actualizar datos del Sheet"
+        class="flex items-center gap-1 px-3 py-1.5 border border-primary text-primary rounded-lg text-label-sm font-bold hover:bg-primary-fixed transition-all">
+        <span class="material-symbols-outlined text-[16px]">refresh</span>Actualizar
+      </button>
+
+      <!-- Separador -->
+      <div class="h-6 w-px bg-outline-variant"></div>
+
+      <button onclick="descargarPlantilla()"
+        class="flex items-center gap-1 px-3 py-1.5 border border-outline-variant rounded-lg text-label-sm hover:bg-surface-container transition-all text-tertiary border-tertiary/40"
+        title="Descargar plantilla XLSX con cabeceras y fila de ejemplo">
+        <span class="material-symbols-outlined text-[18px]">file_download</span>Plantilla
+      </button>
+      <button onclick="document.getElementById('importXlsInput').click()"
+        class="flex items-center gap-1 px-3 py-1.5 border border-outline-variant rounded-lg text-label-sm hover:bg-surface-container transition-all">
+        <span class="material-symbols-outlined text-[18px]">upload</span>Importar XLS
+      </button>
+      <input id="importXlsInput" type="file" accept=".xls,.xlsx" class="hidden" onchange="importFromXLS(event)">
+      <button onclick="exportToXLS()"
+        class="flex items-center gap-1 px-3 py-1.5 border border-outline-variant rounded-lg text-label-sm hover:bg-surface-container transition-all">
+        <span class="material-symbols-outlined text-[18px]">download</span>Exportar XLS
+      </button>
+
+      <!-- Separador -->
+      <div class="h-6 w-px bg-outline-variant"></div>
+
+      <div class="w-8 h-8 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container border border-outline-variant text-xs font-bold">U</div>
+    </div>
+  </header>
+
+  <div class="p-6 flex flex-col gap-6 max-w-[1440px] mx-auto w-full">
+
+    <!-- KPIs -->
+    <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+
+      <!-- 1. Total Pedidos → % conformes/total -->
+      <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col gap-1">
+        <span class="text-label-sm text-on-surface-variant uppercase tracking-wider">Total Pedidos</span>
+        <span id="kpi-total" class="text-headline-md font-bold text-primary">0</span>
+        <div class="flex items-center gap-1 mt-1">
+          <span class="material-symbols-outlined text-[13px] text-green-600">check_circle</span>
+          <span id="kpi-total-sub" class="text-xs font-bold text-green-600">0 conf.</span>
+          <span class="text-xs text-on-surface-variant">/ <span id="kpi-total-gen">0</span> total</span>
+        </div>
+      </div>
+
+      <!-- 2. Total Unidades → sum total - sum pendientes -->
+      <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col gap-1">
+        <span class="text-label-sm text-on-surface-variant uppercase tracking-wider">Total Unidades</span>
+        <span id="kpi-unidades" class="text-headline-md font-bold text-secondary">0</span>
+        <div class="flex items-center gap-1 mt-1">
+          <span class="material-symbols-outlined text-[13px] text-error">remove_circle</span>
+          <span id="kpi-unidades-pend" class="text-xs font-bold text-error">0</span>
+          <span class="text-xs text-on-surface-variant">und. pendientes</span>
+        </div>
+      </div>
+
+      <!-- 3. Total Bultos → sumatoria total -->
+      <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col gap-1">
+        <span class="text-label-sm text-on-surface-variant uppercase tracking-wider">Total Bultos</span>
+        <span id="kpi-bultos" class="text-headline-md font-bold text-tertiary">0</span>
+        <div class="flex items-center gap-1 mt-1">
+          <span class="material-symbols-outlined text-[13px] text-on-surface-variant">inventory_2</span>
+          <span class="text-xs text-on-surface-variant">sumatoria total de bultos</span>
+        </div>
+      </div>
+
+      <!-- 4. Conformes → conteo pedidos con status Conforme -->
+      <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col gap-1">
+        <span class="text-label-sm text-on-surface-variant uppercase tracking-wider">Conformes</span>
+        <span id="kpi-conformes" class="text-headline-md font-bold text-green-600">0</span>
+        <div class="flex items-center gap-1 mt-1">
+          <span class="material-symbols-outlined text-[13px] text-green-600">check_circle</span>
+          <span class="text-xs text-on-surface-variant">pedidos con bultos</span>
+        </div>
+      </div>
+
+      <!-- 5. Pendientes → conteo pedidos con status Pendiente -->
+      <div class="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant flex flex-col gap-1">
+        <span class="text-label-sm text-on-surface-variant uppercase tracking-wider">Pendientes</span>
+        <span id="kpi-pendientes" class="text-headline-md font-bold text-error">0</span>
+        <div class="flex items-center gap-1 mt-1">
+          <span class="material-symbols-outlined text-[13px] text-error">warning</span>
+          <span class="text-xs text-on-surface-variant">pedidos sin bultos</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Filtros -->
+    <div class="bg-surface-container-low p-4 rounded-xl border border-outline-variant/50 flex flex-wrap items-end gap-4">
+      <div class="flex flex-col gap-1">
+        <label class="text-label-sm font-bold text-on-surface-variant">Rango de Fechas</label>
+        <div class="flex items-center gap-2">
+          <input id="filterFechaDesde" type="date" onchange="applyFilters()" class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-body-md focus:ring-1 focus:ring-primary">
+          <span class="text-outline">–</span>
+          <input id="filterFechaHasta" type="date" onchange="applyFilters()" class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-body-md focus:ring-1 focus:ring-primary">
+        </div>
+      </div>
+      <div class="flex flex-col gap-1 flex-grow min-w-[140px]">
+        <label class="text-label-sm font-bold text-on-surface-variant">BPCS</label>
+        <input id="filterBpcs" oninput="applyFilters()" type="text" placeholder="Ej: 967310..." class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-body-md focus:ring-1 focus:ring-primary">
+      </div>
+      <div class="flex flex-col gap-1 flex-grow min-w-[140px]">
+        <label class="text-label-sm font-bold text-on-surface-variant">Documento</label>
+        <input id="filterDoc" oninput="applyFilters()" type="text" placeholder="Ej: 4709456..." class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-body-md focus:ring-1 focus:ring-primary">
+      </div>
+      <div class="flex flex-col gap-1">
+        <label class="text-label-sm font-bold text-on-surface-variant">Status</label>
+        <select id="filterStatus" onchange="applyFilters()" class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-body-md focus:ring-1 focus:ring-primary">
+          <option value="">Todos</option>
+          <option>Conforme</option>
+          <option>Pendiente</option>
+        </select>
+      </div>
+      <button onclick="clearFilters()" class="bg-outline text-white px-4 py-1.5 rounded font-bold text-label-sm hover:opacity-80 transition-all h-[34px]">
+        Limpiar
+      </button>
+    </div>
+
+    <!-- Tabla -->
+    <div class="bg-surface-container-lowest border border-outline-variant rounded-xl overflow-hidden shadow-sm">
+      <div class="overflow-x-auto overflow-y-auto" style="max-height:480px;">
+        <table class="w-full text-left border-collapse" id="mainTable">
+          <thead>
+            <tr id="tableHeader" class="bg-tertiary text-on-tertiary sticky-header"></tr>
+          </thead>
+          <tbody id="tableBody" class="divide-y divide-outline-variant">
+            <tr><td colspan="12" class="text-center py-12 text-on-surface-variant">
+              <span class="material-symbols-outlined text-[48px] block mb-2 opacity-30">cloud_download</span>
+              Cargando datos del Sheet...
+            </td></tr>
+          </tbody>
+        </table>
+      </div>
+      <!-- Footer tabla -->
+      <div class="p-4 bg-surface-container border-t border-outline-variant flex flex-col md:flex-row justify-between items-center gap-4">
+        <div class="text-body-md text-on-surface-variant">
+          Mostrando <span id="showingFrom" class="font-bold">0</span>–<span id="showingTo" class="font-bold">0</span>
+          de <span id="totalEntries" class="font-bold">0</span> registros
+          &nbsp;|&nbsp; <span id="selSummary" class="text-primary font-bold"></span>
+        </div>
+        <div class="flex items-center gap-1" id="pagination"></div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<!-- Mobile Bottom Nav -->
+<nav class="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-surface-container flex items-center justify-around z-50 border-t border-outline-variant/30 px-4">
+  <a class="flex flex-col items-center gap-1 text-primary font-bold" href="#">
+    <span class="material-symbols-outlined">inventory_2</span>
+    <span class="text-[10px]">Bultos</span>
+  </a>
+  <button onclick="document.getElementById('importXlsInput').click()" class="flex flex-col items-center gap-1 text-on-surface-variant">
+    <span class="material-symbols-outlined">upload</span><span class="text-[10px]">Importar</span>
+  </button>
+  <button onclick="exportToXLS()" class="flex flex-col items-center gap-1 text-on-surface-variant">
+    <span class="material-symbols-outlined">download</span><span class="text-[10px]">Exportar</span>
+  </button>
+  <button onclick="reloadSheet()" class="flex flex-col items-center gap-1 text-on-surface-variant">
+    <span class="material-symbols-outlined">refresh</span><span class="text-[10px]">Sync</span>
+  </button>
+</nav>
+
+<div id="toast" class="toast"></div>
+
+<script>
+// ─────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────
+const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQgn1Yp4-QseqM82ZqboVRImdNiFIx5kJLfO8ALa5nml7yqKSi9-HCWygRTHW932b7m06Jq2bG09QJA/pub?gid=631088075&single=true&output=csv';
+const ROWS_PER_PAGE = 25;
+// Columnas reales del Sheet (orden exacto de la imagen)
+const SHEET_COLS   = ['ID BULTOS','BPCS','DOCUMENTO','DESTINATARIO','FECHA CITA','CANTIDAD','BULTOS','USUARIO','REGISTRO'];
+// Columna virtual añadida por la app
+const VIRTUAL_STATUS = 'STATUS';
+
+// ─────────────────────────────────────────
+// ESTADO
+// ─────────────────────────────────────────
+let allData      = [];   // filas del sheet (array de arrays, sin STATUS)
+let filteredData = [];
+let selectedRows = new Set();  // índices en allData
+let currentPage  = 1;
+let columnHeaders = [...SHEET_COLS]; // cabeceras actuales (editables)
+
+// ─────────────────────────────────────────
+// UTILIDADES FECHA
+// ─────────────────────────────────────────
+function fmtDisplay(v){
+  if(!v) return '';
+  const s=String(v).replace(/\D/g,'');
+  return s.length===8?`${s.slice(6,8)}/${s.slice(4,6)}/${s.slice(0,4)}`:v;
+}
+function fmtStorage(v){
+  if(!v) return '';
+  const m=String(v).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m?`${m[3]}${m[2]}${m[1]}`:String(v).replace(/\D/g,'');
+}
+function isFechaCol(h){ return /fecha/i.test(h); }
+
+// ─────────────────────────────────────────
+// STATUS VIRTUAL: Conforme si BULTOS > 0, Pendiente si no
+// ─────────────────────────────────────────
+function computeStatus(row){
+  const idxB = columnHeaders.findIndex(h=>h.toUpperCase()==='BULTOS');
+  const val  = idxB>=0 ? String(row[idxB]).trim() : '';
+  return (val && val!=='0' && val!=='') ? 'Conforme' : 'Pendiente';
+}
+
+const STATUS_STYLE = {
+  'Conforme' : 'bg-green-100 text-green-800',
+  'Pendiente': 'bg-yellow-100 text-yellow-800',
+};
+
+// ─────────────────────────────────────────
+// CARGA AUTOMÁTICA desde Sheet
+// ─────────────────────────────────────────
+async function loadSheet(){
+  showOverlay(true);
+  try{
+    const proxy = `https://api.allorigins.win/get?url=${encodeURIComponent(SHEET_CSV_URL)}`;
+    const resp  = await fetch(proxy);
+    if(!resp.ok) throw new Error('red');
+    const json  = await resp.json();
+    parseCSV(json.contents);
+    const now = new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
+    document.getElementById('syncTime').textContent = `Sync ${now}`;
+    showToast(`${allData.length} registros cargados`, 'success');
+  } catch(e){
+    showToast('Error al conectar al Sheet — mostrando datos de demostración', 'error');
+    loadDemoData();
+  } finally {
+    showOverlay(false);
+  }
+}
+
+function reloadSheet(){ loadSheet(); }
+
+function parseCSV(csv){
+  const lines = csv.split('\n').filter(l=>l.trim());
+  if(lines.length<2){ loadDemoData(); return; }
+  const sep = lines[0].includes('\t')?'\t':',';
+  const csvH = lines[0].split(sep).map(h=>h.replace(/"/g,'').trim());
+  // Usar cabeceras del CSV si son válidas
+  if(csvH.length>=2) columnHeaders = csvH;
+  allData=[];
+  for(let i=1;i<lines.length;i++){
+    const cells=splitLine(lines[i],sep);
+    if(cells.every(c=>!c.trim())) continue;
+    allData.push(cells.map(c=>c.replace(/"/g,'').trim()));
+  }
+  recalcIds();
+  applyFilters();
+}
+
+function splitLine(line,sep){
+  const r=[];let q=false,c='';
+  for(let i=0;i<line.length;i++){
+    const ch=line[i];
+    if(ch==='"'){q=!q;}
+    else if(ch===sep&&!q){r.push(c);c='';}
+    else c+=ch;
+  }
+  r.push(c);return r;
+}
+
+function loadDemoData(){
+  columnHeaders=['ID BULTOS','BPCS','DOCUMENTO','DESTINATARIO','FECHA CITA','CANTIDAD','BULTOS','USUARIO','REGISTRO'];
+  allData=[
+    ['1','967310','4709456','IMPORTACIONES GYA S.A.C','20260625','36','3','J.PEREZ','14:22:01'],
+    ['2','967311','4709510','COSMETIC PLANET S.A.C.','20260625','24','','J.PEREZ','14:23:45'],
+    ['3','967312','4709921','NIMER DE LA CRUZ VARGAS','20260625','26','','M.GOMEZ','14:25:12'],
+    ['4','967313','4710404','LOIDA TORRES CAMPOS','20260625','24','2','M.GOMEZ','14:28:30'],
+    ['5','968159','4900010998','GRUPO KAMILL S.A.C','20260625','156','8','R.SANCHEZ','15:01:44'],
+  ];
+  recalcIds();
+  applyFilters();
+}
+
+// ─────────────────────────────────────────
+// CORRELATIVO
+// ─────────────────────────────────────────
+function recalcIds(){
+  const idx=columnHeaders.findIndex(h=>/id bultos/i.test(h));
+  if(idx<0) return;
+  allData.forEach((row,i)=>{ row[idx]=i+1; });
+}
+
+// ─────────────────────────────────────────
+// CABECERAS EDITABLES
+// ─────────────────────────────────────────
+function renderHeaders(){
+  const tr=document.getElementById('tableHeader');
+  tr.innerHTML='';
+
+  // Checkbox "seleccionar todo"
+  const thCb=document.createElement('th');
+  thCb.className='px-3 py-2 w-10';
+  thCb.innerHTML='<input type="checkbox" class="cb-row" id="cbAll" title="Seleccionar todo">';
+  thCb.querySelector('#cbAll').addEventListener('change',e=>toggleAllRows(e.target.checked));
+  tr.appendChild(thCb);
+
+  // Columnas del sheet (ID BULTOS oculto visualmente)
+  columnHeaders.forEach((h,i)=>{
+    if(/id bultos/i.test(h)) return; // no renderizar esta columna
+    const th=document.createElement('th');
+    th.className='col-header-cell px-4 py-2 text-label-sm font-label-sm uppercase tracking-wider whitespace-nowrap';
+    th.title='Doble clic para editar';
+    th.innerHTML=`<span class="hl">${h}</span>`;
+    th.addEventListener('dblclick',()=>editHeader(th,i));
+    tr.appendChild(th);
+  });
+
+  // Columna virtual STATUS (no editable)
+  const thS=document.createElement('th');
+  thS.className='px-4 py-2 text-label-sm font-label-sm uppercase tracking-wider whitespace-nowrap';
+  thS.innerHTML='<span class="hl">STATUS</span>';
+  tr.appendChild(thS);
+}
+
+function editHeader(th,idx){
+  const cur=th.querySelector('.hl').textContent;
+  const inp=document.createElement('input');
+  inp.value=cur; inp.style.minWidth='80px';
+  th.innerHTML=''; th.appendChild(inp);
+  inp.focus(); inp.select();
+  const save=()=>{
+    const v=inp.value.trim()||cur;
+    columnHeaders[idx]=v;
+    renderHeaders(); renderTable();
+    showToast(`Columna → "${v}"`, 'success');
+  };
+  inp.addEventListener('blur',save);
+  inp.addEventListener('keydown',e=>{
+    if(e.key==='Enter') save();
+    if(e.key==='Escape'){columnHeaders[idx]=cur;renderHeaders();renderTable();}
+  });
+}
+
+// ─────────────────────────────────────────
+// IMPORTAR XLS
+// ─────────────────────────────────────────
+function importFromXLS(event){
+  const file=event.target.files[0]; if(!file) return;
+  showToast('Leyendo XLS...','info');
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
+      if(rows.length<2){showToast('Archivo vacío','error');return;}
+      // Ignorar columna STATUS si viene en el XLS (es virtual)
+      let heads=rows[0].map(h=>String(h).trim());
+      const statusColIdx=heads.findIndex(h=>/^status$/i.test(h));
+      if(statusColIdx>=0) heads.splice(statusColIdx,1);
+      columnHeaders=heads;
+      allData=rows.slice(1).filter(r=>r.some(c=>String(c).trim())).map(r=>{
+        let cells=heads.map((_,i)=>String(r[i]??'').trim());
+        return cells;
+      });
+      recalcIds(); selectedRows.clear(); applyFilters();
+      showToast(`${allData.length} registros importados de "${file.name}"`, 'success');
+    }catch(err){showToast('Error XLS: '+err.message,'error');}
+  };
+  reader.readAsArrayBuffer(file);
+  event.target.value='';
+}
+
+// ─────────────────────────────────────────
+// EXPORTAR XLS (todos)
+// ─────────────────────────────────────────
+function exportToXLS(){
+  if(!allData.length){showToast('Sin datos para exportar','error');return;}
+  _doExport(allData, 'control_bultos');
+}
+
+// ─────────────────────────────────────────
+// EXPORTAR SELECCIONADOS
+// ─────────────────────────────────────────
+function exportSelected(){
+  if(!selectedRows.size){showToast('Selecciona al menos una fila','error');return;}
+  const rows=[...selectedRows].map(i=>allData[i]);
+  _doExport(rows,'control_bultos_seleccion');
+}
+
+function _doExport(rows, baseName){
+  // Incluir STATUS virtual en el XLS
+  const heads=[...columnHeaders, VIRTUAL_STATUS];
+  const exportRows=[heads, ...rows.map(row=>{
+    const cells=row.map((cell,i)=>{
+      if(isFechaCol(columnHeaders[i])){
+        const m=String(cell).match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+        return m?`${m[3]}${m[2]}${m[1]}`:cell;
+      }
+      return cell;
+    });
+    cells.push(computeStatus(row)); // añadir STATUS
+    return cells;
+  })];
+  const ws=XLSX.utils.aoa_to_sheet(exportRows);
+  ws['!cols']=heads.map(()=>({wch:18}));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Bultos');
+  const d=new Date().toISOString().slice(0,10).replace(/-/g,'');
+  XLSX.writeFile(wb,`${baseName}_${d}.xlsx`);
+  showToast('Archivo descargado ✓','success');
+}
+
+// ─────────────────────────────────────────
+// PLANTILLA XLSX
+// ─────────────────────────────────────────
+function descargarPlantilla(){
+  // Cabeceras sin ID BULTOS (se genera automáticamente al subir)
+  const heads = ['BPCS','DOCUMENTO','DESTINATARIO','FECHA CITA','CANTIDAD','BULTOS','USUARIO','REGISTRO'];
+
+  // Fila de ejemplo con datos de muestra
+  const ejemplo = [
+    '967310',        // BPCS
+    '4709456',       // DOCUMENTO
+    'IMPORTACIONES GYA S.A.C',  // DESTINATARIO
+    '20260625',      // FECHA CITA (formato yyyymmdd)
+    '36',            // CANTIDAD
+    '3',             // BULTOS (dejar vacío si aún no tiene)
+    'J.PEREZ',       // USUARIO
+    '14:22:01',      // REGISTRO
+  ];
+
+  const ws = XLSX.utils.aoa_to_sheet([heads, ejemplo]);
+
+  // Estilo de anchos de columna
+  ws['!cols'] = [
+    {wch:10}, // BPCS
+    {wch:14}, // DOCUMENTO
+    {wch:30}, // DESTINATARIO
+    {wch:12}, // FECHA CITA
+    {wch:10}, // CANTIDAD
+    {wch:10}, // BULTOS
+    {wch:12}, // USUARIO
+    {wch:12}, // REGISTRO
+  ];
+
+  // Nota al pie en fila 3
+  ws['A3'] = { v: '* FECHA CITA en formato yyyymmdd (ej: 20260625). BULTOS vacío = Pendiente, con valor = Conforme. ID BULTOS se genera automáticamente.', t:'s' };
+  ws['!merges'] = [{ s:{r:2,c:0}, e:{r:2,c:7} }];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Plantilla');
+  XLSX.writeFile(wb, 'plantilla_control_bultos.xlsx');
+  showToast('Plantilla descargada ✓', 'success');
+}
+
+
+function applyFilters(){
+  const g   =document.getElementById('globalSearch').value.toLowerCase();
+  const bpcs=document.getElementById('filterBpcs').value.toLowerCase();
+  const doc =document.getElementById('filterDoc').value.toLowerCase();
+  const sta =document.getElementById('filterStatus').value;
+  const from=document.getElementById('filterFechaDesde').value.replace(/-/g,'');
+  const to  =document.getElementById('filterFechaHasta').value.replace(/-/g,'');
+
+  const iB=columnHeaders.findIndex(h=>/bpcs/i.test(h));
+  const iD=columnHeaders.findIndex(h=>/documento/i.test(h));
+  const iF=columnHeaders.findIndex(h=>isFechaCol(h));
+
+  filteredData=allData.filter(row=>{
+    if(g && !row.join(' ').toLowerCase().includes(g)) return false;
+    if(bpcs && iB>=0 && !String(row[iB]).toLowerCase().includes(bpcs)) return false;
+    if(doc  && iD>=0 && !String(row[iD]).toLowerCase().includes(doc))  return false;
+    if(sta){
+      const vs=computeStatus(row);
+      if(vs!==sta) return false;
+    }
+    if((from||to) && iF>=0){
+      const rf=String(row[iF]).replace(/\D/g,'');
+      if(from && rf<from) return false;
+      if(to   && rf>to)   return false;
+    }
+    return true;
+  });
+
+  currentPage=1;
+  updateKPIs();
+  renderTable();
+  renderPagination();
+  updateSelUI();
+}
+
+function clearFilters(){
+  ['globalSearch','filterBpcs','filterDoc'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('filterStatus').value='';
+  document.getElementById('filterFechaDesde').value='';
+  document.getElementById('filterFechaHasta').value='';
+  applyFilters();
+}
+
+// ─────────────────────────────────────────
+// KPIs
+// ─────────────────────────────────────────
+function updateKPIs(){
+  const iC = columnHeaders.findIndex(h=>/cantidad/i.test(h));
+  const iB = columnHeaders.findIndex(h=>/^bultos$/i.test(h));
+
+  // Totales sobre datos filtrados
+  const total      = filteredData.length;
+  const conformes  = filteredData.filter(r=>computeStatus(r)==='Conforme').length;
+  const pendientes = filteredData.filter(r=>computeStatus(r)==='Pendiente').length;
+
+  // Sumatoria total de unidades
+  const unidadesTotal = filteredData.reduce((s,r)=>s+(parseFloat(r[iC])||0), 0);
+  // Sumatoria de unidades solo de filas Pendiente
+  const unidadesPend  = filteredData
+    .filter(r=>computeStatus(r)==='Pendiente')
+    .reduce((s,r)=>s+(parseFloat(r[iC])||0), 0);
+
+  // Sumatoria total de bultos
+  const bultosTotal = filteredData.reduce((s,r)=>s+(parseFloat(r[iB])||0), 0);
+
+  // ── KPI 1: Total Pedidos — subtext: conformes / total general
+  document.getElementById('kpi-total').textContent    = total.toLocaleString('es-PE');
+  document.getElementById('kpi-total-sub').textContent= conformes.toLocaleString('es-PE')+' conf.';
+  document.getElementById('kpi-total-gen').textContent= total.toLocaleString('es-PE');
+
+  // ── KPI 2: Total Unidades — subtext: unidades de pendientes
+  document.getElementById('kpi-unidades').textContent     = unidadesTotal.toLocaleString('es-PE');
+  document.getElementById('kpi-unidades-pend').textContent= unidadesPend.toLocaleString('es-PE');
+
+  // ── KPI 3: Total Bultos — sumatoria total
+  document.getElementById('kpi-bultos').textContent = bultosTotal.toLocaleString('es-PE');
+
+  // ── KPI 4: Conformes — conteo pedidos con bultos
+  document.getElementById('kpi-conformes').textContent = conformes.toLocaleString('es-PE');
+
+  // ── KPI 5: Pendientes — conteo pedidos sin bultos
+  document.getElementById('kpi-pendientes').textContent = pendientes.toLocaleString('es-PE');
+}
+
+// ─────────────────────────────────────────
+// RENDERIZAR TABLA
+// ─────────────────────────────────────────
+function renderTable(){
+  renderHeaders();
+  const tbody=document.getElementById('tableBody');
+  tbody.innerHTML='';
+
+  if(!filteredData.length){
+    tbody.innerHTML=`<tr><td colspan="${columnHeaders.length+2}" class="text-center py-12 text-on-surface-variant">
+      <span class="material-symbols-outlined text-[48px] block mb-2 opacity-30">search_off</span>
+      Sin resultados</td></tr>`;
+    document.getElementById('showingFrom').textContent='0';
+    document.getElementById('showingTo').textContent='0';
+    document.getElementById('totalEntries').textContent='0';
+    return;
+  }
+
+  const start=(currentPage-1)*ROWS_PER_PAGE;
+  const end  =Math.min(start+ROWS_PER_PAGE,filteredData.length);
+  const page =filteredData.slice(start,end);
+  const iId  =columnHeaders.findIndex(h=>/id bultos/i.test(h));
+
+  page.forEach((row)=>{
+    const globalIdx=allData.indexOf(row);
+    const tr=document.createElement('tr');
+    tr.className='zebra-row hover:bg-secondary-fixed-dim/20 transition-colors'+(selectedRows.has(globalIdx)?' row-selected':'');
+
+    // Checkbox
+    const tdCb=document.createElement('td');
+    tdCb.className='px-3 py-3';
+    const cb=document.createElement('input');
+    cb.type='checkbox'; cb.className='cb-row';
+    cb.checked=selectedRows.has(globalIdx);
+    cb.addEventListener('change',()=>toggleRow(globalIdx,cb.checked));
+    tdCb.appendChild(cb);
+    tr.appendChild(tdCb);
+
+    // Celdas de datos (ID BULTOS oculto visualmente, existe en datos)
+    row.forEach((cell,ci)=>{
+      const td=document.createElement('td');
+
+      if(ci===iId){
+        return; // saltar — no renderizar la celda ID BULTOS
+      }
+      if(isFechaCol(columnHeaders[ci])){
+        td.className='px-4 py-3 editable-cell font-data-display text-on-surface-variant';
+        td.textContent=fmtDisplay(cell);
+        td.addEventListener('dblclick',()=>editCell(td,row,ci,true));
+        tr.appendChild(td); return;
+      }
+      td.className='px-4 py-3 editable-cell font-data-display';
+      td.textContent=cell||'—';
+      td.addEventListener('dblclick',()=>editCell(td,row,ci,false));
+      tr.appendChild(td);
+    });
+
+    // Columna virtual STATUS
+    const tdS=document.createElement('td');
+    tdS.className='px-4 py-3';
+    const st=computeStatus(row);
+    const cls=STATUS_STYLE[st]||'bg-gray-100 text-gray-700';
+    tdS.innerHTML=`<span class="${cls} text-[10px] font-bold px-2 py-0.5 rounded uppercase">${st}</span>`;
+    tr.appendChild(tdS);
+
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('showingFrom').textContent=(start+1).toLocaleString('es-PE');
+  document.getElementById('showingTo').textContent  =end.toLocaleString('es-PE');
+  document.getElementById('totalEntries').textContent=filteredData.length.toLocaleString('es-PE');
+}
+
+// ─────────────────────────────────────────
+// EDICIÓN INLINE
+// ─────────────────────────────────────────
+function editCell(td,row,ci,isFecha){
+  const orig=row[ci];
+  const disp=isFecha?fmtDisplay(orig):orig;
+  td.innerHTML='';
+  const inp=document.createElement('input');
+  inp.value=disp==='—'?'':disp;
+  if(isFecha) inp.placeholder='dd/mm/yyyy';
+  td.appendChild(inp); inp.focus(); inp.select();
+  const save=()=>{
+    let v=inp.value.trim();
+    row[ci]=isFecha&&v?fmtStorage(v):v;
+    const gi=allData.indexOf(row);
+    if(gi>=0) allData[gi][ci]=row[ci];
+    updateKPIs(); renderTable();
+    showToast('Celda actualizada','success');
+  };
+  inp.addEventListener('blur',save);
+  inp.addEventListener('keydown',e=>{
+    if(e.key==='Enter') inp.blur();
+    if(e.key==='Escape'){row[ci]=orig;renderTable();}
+  });
+}
+
+// ─────────────────────────────────────────
+// SELECCIÓN DE FILAS
+// ─────────────────────────────────────────
+function toggleRow(idx,checked){
+  if(checked) selectedRows.add(idx);
+  else         selectedRows.delete(idx);
+  updateSelUI();
+  // Actualizar apariencia de la fila sin re-renderizar toda la tabla
+  const rows=document.querySelectorAll('#tableBody tr');
+  rows.forEach(tr=>{
+    const cb=tr.querySelector('.cb-row');
+    if(!cb) return;
+    // re-aplicar clase según estado actual
+  });
+  renderTable(); // simple: re-render para mantener sincronía visual
+}
+
+function toggleAllRows(checked){
+  const start=(currentPage-1)*ROWS_PER_PAGE;
+  const end  =Math.min(start+ROWS_PER_PAGE,filteredData.length);
+  const page =filteredData.slice(start,end);
+  page.forEach(row=>{
+    const gi=allData.indexOf(row);
+    if(gi>=0){ checked?selectedRows.add(gi):selectedRows.delete(gi); }
+  });
+  updateSelUI();
+  renderTable();
+}
+
+function updateSelUI(){
+  const n=selectedRows.size;
+  const btn=document.getElementById('exportSelBtn');
+  document.getElementById('selCount').textContent=n;
+  document.getElementById('selSummary').textContent=n?`${n} fila${n>1?'s':''} seleccionada${n>1?'s':''}` : '';
+  btn.classList.toggle('visible', n>0);
+}
+
+// ─────────────────────────────────────────
+// PAGINACIÓN
+// ─────────────────────────────────────────
+function renderPagination(){
+  const pages=Math.ceil(filteredData.length/ROWS_PER_PAGE);
+  const cont=document.getElementById('pagination');
+  cont.innerHTML='';
+  if(pages<=1) return;
+  const btn=(lbl,pg,dis,act)=>{
+    const b=document.createElement('button');
+    b.innerHTML=lbl; b.disabled=dis;
+    b.className=act
+      ?'px-3 py-1 bg-primary text-on-primary rounded font-bold text-label-sm'
+      :'px-3 py-1 border border-outline-variant rounded hover:bg-surface-container-high text-label-sm'+(dis?' opacity-40 cursor-not-allowed':'');
+    if(!dis&&!act) b.addEventListener('click',()=>{currentPage=pg;renderTable();renderPagination();});
+    return b;
+  };
+  cont.appendChild(btn('<span class="material-symbols-outlined text-[18px]">chevron_left</span>',currentPage-1,currentPage===1,false));
+  const range=[];
+  if(pages<=7){for(let i=1;i<=pages;i++) range.push(i);}
+  else{
+    range.push(1);
+    if(currentPage>3) range.push('…');
+    for(let i=Math.max(2,currentPage-1);i<=Math.min(pages-1,currentPage+1);i++) range.push(i);
+    if(currentPage<pages-2) range.push('…');
+    range.push(pages);
+  }
+  range.forEach(p=>{
+    if(p==='…'){const s=document.createElement('span');s.textContent='…';s.className='px-2 text-outline';cont.appendChild(s);}
+    else cont.appendChild(btn(p,p,false,p===currentPage));
+  });
+  cont.appendChild(btn('<span class="material-symbols-outlined text-[18px]">chevron_right</span>',currentPage+1,currentPage===pages,false));
+}
+
+// ─────────────────────────────────────────
+// OVERLAY / TOAST
+// ─────────────────────────────────────────
+function showOverlay(v){
+  document.getElementById('loadingOverlay').style.display=v?'flex':'none';
+}
+function showToast(msg,type='info'){
+  const t=document.getElementById('toast');
+  const c={success:'bg-green-600 text-white',error:'bg-red-600 text-white',info:'bg-primary text-white'};
+  t.className=`toast ${c[type]||c.info}`;
+  t.textContent=msg; t.classList.add('show');
+  clearTimeout(t._t);
+  t._t=setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+// ─────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', loadSheet);
+</script>
+</body>
+</html>
