@@ -511,7 +511,9 @@ function editHeader(th,idx){
 }
 
 // ─────────────────────────────────────────
-// IMPORTAR XLS / XLSX (ambos formatos)
+// IMPORTAR XLS / XLSX
+// Flujo: 1) Lee el XLS  2) Trae datos frescos del WebApp
+//        3) Merge       4) Envia todo al Sheet vía POST
 // ─────────────────────────────────────────
 function importFromXLS(event){
   const file = event.target.files[0];
@@ -519,9 +521,8 @@ function importFromXLS(event){
   showToast('Leyendo archivo...', 'info');
 
   const reader = new FileReader();
-  reader.onload = function(e){
+  reader.onload = async function(e){
     try{
-      // Leer el workbook — funciona con .xls (BIFF5/BIFF8) y .xlsx
       const data = new Uint8Array(e.target.result);
       const wb   = XLSX.read(data, { type:'array', cellDates:false, raw:false });
       const ws   = wb.Sheets[wb.SheetNames[0]];
@@ -533,35 +534,17 @@ function importFromXLS(event){
         return;
       }
 
-      // Cabeceras del archivo importado (fila 1)
-      const fileHeads = rows[0].map(h => String(h ?? '').trim());
-
-      // Columnas virtuales a ignorar al importar
-      const IGNORAR = /^(status|mes)$/i;
-
-      // Filtrar cabeceras válidas (no vacías, no virtuales)
-      const validCols = fileHeads
-        .map((h, i) => ({ h, i }))
-        .filter(({h}) => h && !IGNORAR.test(h));
-
-      if(validCols.length === 0){
-        showToast('No se encontraron columnas válidas', 'error');
-        event.target.value = '';
-        return;
-      }
-
-      // Reconstruir allData mapeando solo columnas válidas, en el orden del Sheet esperado
-      const expectedOrder = [...SHEET_COLS]; // ['ID BULTOS','BPCS','DOCUMENTO',...]
-      columnHeaders = expectedOrder;
+      const fileHeads   = rows[0].map(h => String(h ?? '').trim());
+      const IGNORAR     = /^(status|mes)$/i;
+      const expectedOrder = [...SHEET_COLS];
+      columnHeaders     = expectedOrder;
 
       const newData = rows.slice(1)
         .filter(r => r.some(c => String(c ?? '').trim() !== ''))
-        .map(r => {
-          return expectedOrder.map(col => {
-            const srcIdx = fileHeads.findIndex(h => h.toUpperCase() === col.toUpperCase());
-            return srcIdx >= 0 ? String(r[srcIdx] ?? '').trim() : '';
-          });
-        });
+        .map(r => expectedOrder.map(col => {
+          const srcIdx = fileHeads.findIndex(h => h.toUpperCase() === col.toUpperCase());
+          return srcIdx >= 0 ? String(r[srcIdx] ?? '').trim() : '';
+        }));
 
       if(newData.length === 0){
         showToast('El archivo no tiene filas con datos', 'error');
@@ -569,20 +552,89 @@ function importFromXLS(event){
         return;
       }
 
-      allData = newData;
+      // ── PASO 1: Traer datos frescos del Sheet (via WebApp, no CSV cacheado) ──
+      showToast('Obteniendo datos actuales del Sheet...', 'info');
+      let baseData = [...allData]; // fallback: usar lo que ya tenemos en memoria
+
+      if(WEBAPP_URL){
+        try{
+          const resp = await fetch(WEBAPP_URL + '?action=csv', { cache: 'no-store' });
+          if(resp.ok){
+            const text = await resp.text();
+            const lines = text.split('\n').filter(l => l.trim());
+            if(lines.length >= 2){
+              const sep  = lines[0].includes('\t') ? '\t' : ',';
+              baseData = [];
+              for(let i = 1; i < lines.length; i++){
+                const cells = splitLine(lines[i], sep);
+                if(cells.every(c => !c.trim())) continue;
+                baseData.push(cells.map(c => c.replace(/"/g,'').trim()));
+              }
+            }
+          }
+        } catch(fetchErr){
+          console.warn('No se pudo traer datos frescos, usando memoria:', fetchErr.message);
+        }
+      }
+
+      // ── PASO 2: Merge por BPCS + DOCUMENTO ──
+      const idxBpcs = expectedOrder.indexOf('BPCS');
+      const idxDoc  = expectedOrder.indexOf('DOCUMENTO');
+
+      const existingMap = {};
+      baseData.forEach((row, i) => {
+        const key = String(row[idxBpcs]).trim() + '|' + String(row[idxDoc]).trim();
+        existingMap[key] = i;
+      });
+
+      let insertados  = 0;
+      let actualizados = 0;
+
+      newData.forEach(row => {
+        const key = String(row[idxBpcs]).trim() + '|' + String(row[idxDoc]).trim();
+        if(existingMap.hasOwnProperty(key)){
+          const origId = baseData[existingMap[key]][0]; // preservar ID
+          baseData[existingMap[key]] = [...row];
+          baseData[existingMap[key]][0] = origId;
+          actualizados++;
+        } else {
+          baseData.push([...row]);
+          insertados++;
+        }
+      });
+
+      // ── PASO 3: Actualizar estado local ──
+      allData = baseData;
       recalcIds();
       selectedRows.clear();
       applyFilters();
-      showToast(`✓ ${allData.length} registros importados de "${file.name}"`, 'success');
-      // Sincronizar con el Sheet vía Web App
-      postToSheet('bulkImport', { rows: allData }, (ok, json)=>{
-        if(ok && json) showToast(`✓ Sheet: ${json.inserted||0} nuevos, ${json.updated||0} actualizados`, 'success');
-      });
+      showToast(`✓ ${insertados} nuevos, ${actualizados} actualizados`, 'success');
+
+      // ── PASO 4: Enviar TODO al Sheet vía POST (upsert por fila) ──
+      if(WEBAPP_URL){
+        showToast('Sincronizando con el Sheet...', 'info');
+        try{
+          const body = JSON.stringify({ action: 'bulkImport', rows: allData });
+          const resp = await fetch(WEBAPP_URL, {
+            method : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body
+          });
+          const json = await resp.json();
+          if(json.ok){
+            showToast(`✓ Sheet actualizado: ${json.inserted||0} nuevos, ${json.updated||0} actualizados`, 'success');
+          } else {
+            showToast('Error al guardar en Sheet: ' + (json.error||''), 'error');
+          }
+        } catch(postErr){
+          showToast('Error de red al sincronizar: ' + postErr.message, 'error');
+        }
+      }
+
     } catch(err){
       showToast('Error al leer el archivo: ' + err.message, 'error');
       console.error(err);
     }
-    // Reset input DESPUÉS de procesar
     event.target.value = '';
   };
 
@@ -933,8 +985,8 @@ function showToast(msg,type='info'){
 
 // ─────────────────────────────────────────
 // SINCRONIZACIÓN CON APPS SCRIPT (Web App)
-// Todas las escrituras pasan por aquí.
-// Si WEBAPP_URL está vacío, no hace nada (modo solo lectura).
+// Apps Script requiere mode:'no-cors' para POST cross-origin.
+// Con no-cors no podemos leer la respuesta, pero el POST SÍ llega.
 // ─────────────────────────────────────────
 async function postToSheet(action, data, callback){
   if(!WEBAPP_URL){
@@ -942,17 +994,19 @@ async function postToSheet(action, data, callback){
     return;
   }
   try{
-    const body = JSON.stringify({ action, ...data });
-    const resp = await fetch(WEBAPP_URL, {
+    const payload = JSON.stringify({ action, ...data });
+    // Apps Script no permite leer la respuesta de un POST cross-origin
+    // pero con no-cors el dato SÍ llega al servidor
+    await fetch(WEBAPP_URL, {
       method : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body
+      mode   : 'no-cors',   // ← clave para que Apps Script lo acepte
+      headers: { 'Content-Type': 'text/plain' }, // no-cors solo acepta text/plain
+      body   : payload
     });
-    const json = await resp.json();
-    if(!json.ok) console.warn('[Sheet sync]', json.error);
-    if(callback) callback(json.ok, json);
+    // Con no-cors no podemos leer json de respuesta, asumimos ok
+    if(callback) callback(true, null);
   } catch(err){
-    console.warn('[Sheet sync] Error de red:', err.message);
+    console.warn('[Sheet sync] Error:', err.message);
     if(callback) callback(false, null);
   }
 }
