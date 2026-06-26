@@ -316,6 +316,11 @@ tailwind.config = {
 // CONFIG
 // ─────────────────────────────────────────
 const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQgn1Yp4-QseqM82ZqboVRImdNiFIx5kJLfO8ALa5nml7yqKSi9-HCWygRTHW932b7m06Jq2bG09QJA/pub?gid=152340750&single=true&output=csv';
+
+// ⚠️ REEMPLAZA esta URL con la URL de tu Web App (Apps Script → Implementar → Web App)
+// Ejemplo: 'https://script.google.com/macros/s/AKfycb.../exec'
+const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzKppJxdPgIw_SuKdqWs1dsNnfKfcgXPq2ZvbrTnMbnFKRRjXaL3xqbSYJb1jzYLQHQWg/exec';
+
 // Columnas reales del Sheet — ID BULTOS se oculta en la vista, MES se calcula
 const SHEET_COLS   = ['ID BULTOS','BPCS','DOCUMENTO','DESTINATARIO','FECHA CITA','CANTIDAD','BULTOS','USUARIO','REGISTRO'];
 // Columna virtual añadida por la app
@@ -569,6 +574,10 @@ function importFromXLS(event){
       selectedRows.clear();
       applyFilters();
       showToast(`✓ ${allData.length} registros importados de "${file.name}"`, 'success');
+      // Sincronizar con el Sheet vía Web App
+      postToSheet('bulkImport', { rows: allData }, (ok, json)=>{
+        if(ok && json) showToast(`✓ Sheet: ${json.inserted||0} nuevos, ${json.updated||0} actualizados`, 'success');
+      });
     } catch(err){
       showToast('Error al leer el archivo: ' + err.message, 'error');
       console.error(err);
@@ -863,6 +872,8 @@ function editCell(td,row,ci,isFecha){
     if(gi>=0) allData[gi][ci]=row[ci];
     updateKPIs(); renderTable();
     showToast('Celda actualizada','success');
+    // Sincronizar con el Sheet vía Web App
+    postToSheet('upsertRow', { row: [...row] });
   };
   inp.addEventListener('blur',save);
   inp.addEventListener('keydown',e=>{
@@ -918,6 +929,32 @@ function showToast(msg,type='info'){
   t.textContent=msg; t.classList.add('show');
   clearTimeout(t._t);
   t._t=setTimeout(()=>t.classList.remove('show'),3000);
+}
+
+// ─────────────────────────────────────────
+// SINCRONIZACIÓN CON APPS SCRIPT (Web App)
+// Todas las escrituras pasan por aquí.
+// Si WEBAPP_URL está vacío, no hace nada (modo solo lectura).
+// ─────────────────────────────────────────
+async function postToSheet(action, data, callback){
+  if(!WEBAPP_URL){
+    if(callback) callback(false, null);
+    return;
+  }
+  try{
+    const body = JSON.stringify({ action, ...data });
+    const resp = await fetch(WEBAPP_URL, {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body
+    });
+    const json = await resp.json();
+    if(!json.ok) console.warn('[Sheet sync]', json.error);
+    if(callback) callback(json.ok, json);
+  } catch(err){
+    console.warn('[Sheet sync] Error de red:', err.message);
+    if(callback) callback(false, null);
+  }
 }
 
 // ─────────────────────────────────────────
