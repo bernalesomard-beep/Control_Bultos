@@ -383,23 +383,38 @@ const STATUS_STYLE = {
 // ─────────────────────────────────────────
 async function loadSheet(){
   showOverlay(true);
-  try{
-    const resp = await fetch(SHEET_CSV_URL);
-    if(!resp.ok) throw new Error('HTTP '+resp.status);
-    const text = await resp.text();
-    parseCSV(text);
-    const now = new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
-    document.getElementById('syncTime').textContent = `Sync ${now}`;
-    showToast(`${allData.length} registros cargados`, 'success');
-  } catch(e){
-    showToast('Error al conectar al Sheet — mostrando datos de demostración', 'error');
-    loadDemoData();
-  } finally {
-    showOverlay(false);
+
+  // Intentos en orden: directo → proxy corsproxy.io → proxy allorigins
+  const attempts = [
+    { label: 'directo',      url: SHEET_CSV_URL + '&cachebust=' + Date.now() },
+    { label: 'proxy-1',      url: 'https://corsproxy.io/?' + encodeURIComponent(SHEET_CSV_URL) },
+    { label: 'proxy-2',      url: 'https://api.allorigins.win/raw?url=' + encodeURIComponent(SHEET_CSV_URL) }
+  ];
+
+  for(const attempt of attempts){
+    try{
+      const resp = await fetch(attempt.url, { cache: 'no-store' });
+      if(!resp.ok) throw new Error('HTTP ' + resp.status);
+      const text = await resp.text();
+      if(!text || text.trim().length < 10) throw new Error('Respuesta vacía');
+      parseCSV(text);
+      const now = new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
+      document.getElementById('syncTime').textContent = `Sync ${now}`;
+      showToast(`${allData.length} registros cargados`, 'success');
+      showOverlay(false);
+      return;
+    } catch(e){
+      console.warn(`[loadSheet] Intento ${attempt.label} falló:`, e.message);
+    }
   }
+
+  // Todos los intentos fallaron
+  showToast('No se pudo conectar al Sheet — revisa que esté publicado como CSV', 'error');
+  loadDemoData();
+  showOverlay(false);
 }
 
-function reloadSheet(){ loadSheet(); }
+function reloadSheet(){ showToast('Actualizando datos...','info'); loadSheet(); }
 
 function parseCSV(csv){
   const lines = csv.split('\n').filter(l=>l.trim());
