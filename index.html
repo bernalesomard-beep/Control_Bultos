@@ -380,56 +380,24 @@ const STATUS_STYLE = {
 
 // ─────────────────────────────────────────
 // CARGA AUTOMÁTICA desde Sheet
-// Prioridad: 1) WebApp ?action=json (tiempo real, sin caché)
-//            2) CSV publicado + proxies (fallback)
+// Lee SIEMPRE desde WebApp ?action=json (tiempo real, sin caché de Google)
 // ─────────────────────────────────────────
 async function loadSheet(){
   showOverlay(true);
-
-  // --- Intento 1: WebApp JSON (siempre actualizado, sin caché de Google) ---
-  if(WEBAPP_URL){
-    try{
-      const resp = await fetch(WEBAPP_URL + '?action=json', { cache: 'no-store' });
-      if(resp.ok){
-        const json = await resp.json();
-        if(json.ok && Array.isArray(json.data) && json.data.length >= 0){
-          parseJSON(json.data);
-          const now = new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
-          document.getElementById('syncTime').textContent = `Sync ${now}`;
-          showToast(`${allData.length} registros cargados`, 'success');
-          showOverlay(false);
-          return;
-        }
-      }
-    } catch(e){
-      console.warn('[loadSheet] WebApp JSON falló:', e.message);
-    }
+  try{
+    const resp = await fetch(WEBAPP_URL + '?action=json&t=' + Date.now(), { cache: 'no-store' });
+    if(!resp.ok) throw new Error('HTTP ' + resp.status);
+    const json = await resp.json();
+    if(!json.ok) throw new Error(json.error || 'WebApp error');
+    parseJSON(json.data);
+    const now = new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
+    document.getElementById('syncTime').textContent = `Sync ${now}`;
+    showToast(`${allData.length} registros cargados`, 'success');
+  } catch(e){
+    console.warn('[loadSheet] Error:', e.message);
+    showToast('Error al conectar con el Sheet: ' + e.message, 'error');
+    loadDemoData();
   }
-
-  // --- Fallback: CSV publicado + proxies ---
-  const attempts = [
-    SHEET_CSV_URL + '&cachebust=' + Date.now(),
-    'https://corsproxy.io/?' + encodeURIComponent(SHEET_CSV_URL),
-    'https://api.allorigins.win/raw?url=' + encodeURIComponent(SHEET_CSV_URL)
-  ];
-  for(const url of attempts){
-    try{
-      const resp = await fetch(url, { cache: 'no-store' });
-      if(!resp.ok) throw new Error('HTTP ' + resp.status);
-      const text = await resp.text();
-      if(!text || text.trim().length < 10) throw new Error('Respuesta vacía');
-      parseCSV(text);
-      const now = new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
-      document.getElementById('syncTime').textContent = `Sync ${now}`;
-      showToast(`${allData.length} registros cargados (CSV)`, 'success');
-      showOverlay(false);
-      return;
-    } catch(e){
-      console.warn('[loadSheet] CSV falló intento:', url, e.message);
-    }
-  }
-  showToast('No se pudo conectar al Sheet — verifica que esté publicado como CSV', 'error');
-  loadDemoData();
   showOverlay(false);
 }
 
