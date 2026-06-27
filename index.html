@@ -380,9 +380,33 @@ const STATUS_STYLE = {
 
 // ─────────────────────────────────────────
 // CARGA AUTOMÁTICA desde Sheet
+// Prioridad: 1) WebApp ?action=json (tiempo real, sin caché)
+//            2) CSV publicado + proxies (fallback)
 // ─────────────────────────────────────────
 async function loadSheet(){
   showOverlay(true);
+
+  // --- Intento 1: WebApp JSON (siempre actualizado, sin caché de Google) ---
+  if(WEBAPP_URL){
+    try{
+      const resp = await fetch(WEBAPP_URL + '?action=json', { cache: 'no-store' });
+      if(resp.ok){
+        const json = await resp.json();
+        if(json.ok && Array.isArray(json.data) && json.data.length >= 0){
+          parseJSON(json.data);
+          const now = new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
+          document.getElementById('syncTime').textContent = `Sync ${now}`;
+          showToast(`${allData.length} registros cargados`, 'success');
+          showOverlay(false);
+          return;
+        }
+      }
+    } catch(e){
+      console.warn('[loadSheet] WebApp JSON falló:', e.message);
+    }
+  }
+
+  // --- Fallback: CSV publicado + proxies ---
   const attempts = [
     SHEET_CSV_URL + '&cachebust=' + Date.now(),
     'https://corsproxy.io/?' + encodeURIComponent(SHEET_CSV_URL),
@@ -397,16 +421,32 @@ async function loadSheet(){
       parseCSV(text);
       const now = new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
       document.getElementById('syncTime').textContent = `Sync ${now}`;
-      showToast(`${allData.length} registros cargados`, 'success');
+      showToast(`${allData.length} registros cargados (CSV)`, 'success');
       showOverlay(false);
       return;
     } catch(e){
-      console.warn('[loadSheet] Falló intento:', url, e.message);
+      console.warn('[loadSheet] CSV falló intento:', url, e.message);
     }
   }
   showToast('No se pudo conectar al Sheet — verifica que esté publicado como CSV', 'error');
   loadDemoData();
   showOverlay(false);
+}
+
+// Parsear respuesta JSON del WebApp (?action=json)
+// json.data = array de objetos { 'ID BULTOS': ..., 'BPCS': ..., ... }
+function parseJSON(dataObjs){
+  if(!dataObjs || dataObjs.length === 0){
+    columnHeaders = [...SHEET_COLS];
+    allData = [];
+    recalcIds();
+    applyFilters();
+    return;
+  }
+  columnHeaders = Object.keys(dataObjs[0]);
+  allData = dataObjs.map(obj => columnHeaders.map(h => String(obj[h] ?? '').trim()));
+  recalcIds();
+  applyFilters();
 }
 
 function reloadSheet(){ showToast('Actualizando datos...','info'); loadSheet(); }
@@ -998,13 +1038,17 @@ async function postToSheet(action, data, callback){
     if(callback) callback(false, null);
     return;
   }
+  const payload = JSON.stringify({ action, ...data });
+  // Estrategia doble:
+  // - body texto plano → Apps Script lo lee en e.postData.contents (más confiable)
+  // - ?payload= en URL → Apps Script lo lee en e.parameter.payload (backup)
+  // no-cors impide leer la respuesta pero el POST llega al Sheet correctamente.
+  const url = WEBAPP_URL + '?payload=' + encodeURIComponent(payload);
   try{
-    const payload = JSON.stringify({ action, ...data });
-    // Enviamos como query param para que Apps Script lo reciba en e.parameter.payload
-    const url = WEBAPP_URL + '?payload=' + encodeURIComponent(payload);
     await fetch(url, {
       method : 'POST',
-      mode   : 'no-cors'
+      mode   : 'no-cors',
+      body   : payload   // texto plano → e.postData.contents en Apps Script
     });
     if(callback) callback(true, null);
   } catch(err){
