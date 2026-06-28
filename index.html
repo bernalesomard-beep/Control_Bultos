@@ -90,7 +90,29 @@ tailwind.config = {
   .btn-outline-exec:hover{border-color:#1a3a5c;color:#1a3a5c;background:#f0f5fb}
   .btn-primary-exec{background:#1a3a5c;color:#fff;font-size:11px;font-weight:600;letter-spacing:0.04em;border-radius:5px;border:none;transition:all 0.2s}
   .btn-primary-exec:hover{background:#142e4a}
-  /* Scrollbar discreta */
+  /* ── Modal PIN ── */
+  .pin-overlay{position:fixed;inset:0;background:rgba(10,20,35,0.55);z-index:500;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
+  .pin-box{background:#fff;border-radius:12px;padding:32px 36px;width:340px;box-shadow:0 20px 60px rgba(0,0,0,0.25);border-top:4px solid #1a3a5c;text-align:center}
+  .pin-box h2{font-size:16px;font-weight:700;color:#1a3a5c;margin-bottom:4px}
+  .pin-box p{font-size:12px;color:#8a9ab0;margin-bottom:20px}
+  .pin-input{width:100%;border:2px solid #c4cdd9;border-radius:8px;padding:10px 14px;font-size:15px;font-family:'JetBrains Mono',monospace;letter-spacing:0.15em;text-align:center;outline:none;transition:border-color 0.2s;color:#1a3a5c;font-weight:600}
+  .pin-input:focus{border-color:#1a3a5c;box-shadow:0 0 0 3px rgba(26,58,92,0.12)}
+  .pin-input.error{border-color:#c0392b;animation:shake 0.35s ease}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+  .pin-error{color:#c0392b;font-size:11px;font-weight:600;margin-top:8px;min-height:16px}
+  .pin-btns{display:flex;gap:10px;margin-top:20px}
+  .pin-btns button{flex:1;padding:9px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.2s}
+  .pin-cancel{background:#f4f6f9;color:#3a4d62;border:1px solid #c4cdd9}
+  .pin-cancel:hover{background:#e4e9f0}
+  .pin-confirm{background:#1a3a5c;color:#fff;border:none}
+  .pin-confirm:hover{background:#142e4a}
+  /* ── Modo edición BULTOS activo ── */
+  .bultos-edit-mode{background:#fffbeb !important;outline:2px solid #d97706 !important;border-radius:3px;cursor:text !important}
+  .bultos-edit-mode:hover{background:#fef3c7 !important}
+  #btnEditBultos.active{background:#d97706;color:#fff}
+  #btnEditBultos.active:hover{background:#b45309}
+  #btnSaveBultos{display:none}
+  #btnSaveBultos.visible{display:flex}
   ::-webkit-scrollbar{width:5px;height:5px}
   ::-webkit-scrollbar-track{background:#f4f6f9}
   ::-webkit-scrollbar-thumb{background:#c4cdd9;border-radius:4px}
@@ -173,7 +195,16 @@ tailwind.config = {
 
       <div class="h-5 w-px bg-outline-variant mx-1"></div>
 
-      <div class="flex items-center gap-1 text-[11px] text-on-surface-variant font-mono">
+      <button id="btnEditBultos" onclick="openPinModal()"
+        class="btn-outline-exec flex items-center gap-1.5 px-3 py-1.5" style="color:#d97706;border-color:#d97706">
+        <span class="material-symbols-outlined text-[15px]">lock</span>Editar Bultos
+      </button>
+      <button id="btnSaveBultos" onclick="saveBultosEdits()"
+        class="btn-primary-exec flex items-center gap-1.5 px-3 py-1.5" style="background:#16a34a">
+        <span class="material-symbols-outlined text-[15px]">save</span>Guardar Cambios
+      </button>
+
+      <div class="h-5 w-px bg-outline-variant mx-1"></div>
         <span class="material-symbols-outlined text-[13px]">schedule</span>
         <span id="syncTime">Sin actualizar</span>
       </div>
@@ -937,6 +968,7 @@ function renderTable(){
     row.forEach((cell,ci)=>{
       if(ci===iId) return; // ocultar columna ID BULTOS
       const td=document.createElement('td');
+      const isBultos = /^bultos$/i.test(columnHeaders[ci]);
       if(isFechaCol(columnHeaders[ci])){
         td.className='px-4 py-2.5 editable-cell font-mono text-[12px] text-on-surface-variant';
         td.textContent=fmtDisplay(cell);
@@ -945,6 +977,14 @@ function renderTable(){
         td.className='px-4 py-2.5 editable-cell text-[13px]';
         td.textContent=cell||'—';
         td.addEventListener('dblclick',()=>editCell(td,row,ci,false));
+      }
+      if(isBultos){
+        td.dataset.bultos='1';
+        td.dataset.rowidx=globalIdx;
+        if(editBultosMode){
+          td.classList.add('bultos-edit-mode');
+          td.onclick=()=>editBultosCell(td);
+        }
       }
       tr.appendChild(td);
     });
@@ -1074,6 +1114,168 @@ async function postToSheet(action, data, callback){
 // INIT
 // ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', loadSheet);
+</script>
+<!-- ── Modal PIN ── -->
+<div id="pinOverlay" class="pin-overlay" style="display:none" onclick="if(event.target===this)closePinModal()">
+  <div class="pin-box">
+    <div style="font-size:36px;margin-bottom:8px">🔐</div>
+    <h2>Acceso a Edición</h2>
+    <p>Ingrese su PIN para habilitar la edición de BULTOS</p>
+    <input id="pinInput" class="pin-input" type="password" maxlength="20"
+      placeholder="PIN de acceso"
+      onkeydown="if(event.key==='Enter')confirmPin()"
+      oninput="document.getElementById('pinInput').classList.remove('error');document.getElementById('pinError').textContent=''">
+    <div id="pinError" class="pin-error"></div>
+    <div class="pin-btns">
+      <button class="pin-cancel" onclick="closePinModal()">Cancelar</button>
+      <button class="pin-confirm" onclick="confirmPin()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────
+// EDICIÓN BULTOS CON PIN
+// ─────────────────────────────────────────
+const VALID_PINS = ['LCUBA','OBERNALES'];
+let editBultosMode = false;
+let bultosEdits = {}; // { globalRowIndex: newValue }
+
+function openPinModal(){
+  if(editBultosMode){ cancelBultosEdit(); return; }
+  document.getElementById('pinInput').value='';
+  document.getElementById('pinError').textContent='';
+  document.getElementById('pinInput').classList.remove('error');
+  document.getElementById('pinOverlay').style.display='flex';
+  setTimeout(()=>document.getElementById('pinInput').focus(),100);
+}
+
+function closePinModal(){
+  document.getElementById('pinOverlay').style.display='none';
+}
+
+function confirmPin(){
+  const val = document.getElementById('pinInput').value.trim().toUpperCase();
+  if(VALID_PINS.includes(val)){
+    closePinModal();
+    activateBultosEdit();
+  } else {
+    const inp = document.getElementById('pinInput');
+    inp.classList.add('error');
+    document.getElementById('pinError').textContent='PIN incorrecto. Intente nuevamente.';
+    inp.value='';
+    setTimeout(()=>inp.focus(),50);
+  }
+}
+
+function activateBultosEdit(){
+  editBultosMode = true;
+  bultosEdits = {};
+
+  // Cambiar botón Editar → estilo activo
+  const btnEdit = document.getElementById('btnEditBultos');
+  btnEdit.innerHTML='<span class="material-symbols-outlined text-[15px]">lock_open</span>Cancelar Edición';
+  btnEdit.style.background='#fef3c7';
+  btnEdit.style.color='#b45309';
+  btnEdit.style.borderColor='#d97706';
+
+  // Mostrar botón Guardar
+  document.getElementById('btnSaveBultos').classList.add('visible');
+
+  // Resaltar celdas BULTOS visibles
+  highlightBultosCells(true);
+  showToast('Modo edición BULTOS activado','info');
+}
+
+function cancelBultosEdit(){
+  editBultosMode = false;
+  bultosEdits = {};
+  const btnEdit = document.getElementById('btnEditBultos');
+  btnEdit.innerHTML='<span class="material-symbols-outlined text-[15px]">lock</span>Editar Bultos';
+  btnEdit.style.background='';
+  btnEdit.style.color='#d97706';
+  btnEdit.style.borderColor='#d97706';
+  document.getElementById('btnSaveBultos').classList.remove('visible');
+  highlightBultosCells(false);
+  showToast('Edición cancelada','info');
+}
+
+function highlightBultosCells(active){
+  const iB = columnHeaders.findIndex(h=>/^bultos$/i.test(h));
+  if(iB<0) return;
+  // El índice de columna visual: checkbox(0) + MES(1) + columnas sheet visibles + STATUS
+  // Necesitamos encontrar las td por data-colidx
+  document.querySelectorAll('#tableBody tr').forEach(tr=>{
+    const tds = tr.querySelectorAll('td');
+    // buscar td con data-bultos
+    tds.forEach(td=>{
+      if(td.dataset.bultos==='1'){
+        if(active){
+          td.classList.add('bultos-edit-mode');
+          td.style.cursor='text';
+          td.onclick = ()=>editBultosCell(td);
+        } else {
+          td.classList.remove('bultos-edit-mode');
+          td.style.cursor='';
+          td.onclick = null;
+        }
+      }
+    });
+  });
+}
+
+function editBultosCell(td){
+  if(!editBultosMode) return;
+  if(td.querySelector('input')) return; // ya en edición
+  const orig = td.textContent==='—'?'':td.textContent;
+  const rowIdx = parseInt(td.dataset.rowidx);
+  td.innerHTML='';
+  const inp = document.createElement('input');
+  inp.value = orig;
+  inp.type = 'number';
+  inp.min = '0';
+  inp.style.cssText='width:100%;background:transparent;border:none;outline:none;font-family:JetBrains Mono,monospace;font-size:13px;font-weight:600;color:#1a3a5c;text-align:center';
+  td.appendChild(inp);
+  inp.focus(); inp.select();
+
+  const save=()=>{
+    const v = inp.value.trim();
+    bultosEdits[rowIdx] = v;
+    td.textContent = v||'—';
+    td.classList.add('bultos-edit-mode');
+    td.onclick = ()=>editBultosCell(td);
+  };
+  inp.addEventListener('blur', save);
+  inp.addEventListener('keydown', e=>{
+    if(e.key==='Enter') inp.blur();
+    if(e.key==='Escape'){ td.textContent=orig||'—'; td.classList.add('bultos-edit-mode'); td.onclick=()=>editBultosCell(td); }
+  });
+}
+
+function saveBultosEdits(){
+  if(Object.keys(bultosEdits).length===0){
+    showToast('No hay cambios para guardar','info');
+    return;
+  }
+  const iB = columnHeaders.findIndex(h=>/^bultos$/i.test(h));
+  let saved=0;
+  Object.entries(bultosEdits).forEach(([ridx, val])=>{
+    const ri = parseInt(ridx);
+    if(allData[ri]){
+      allData[ri][iB] = val;
+      // Sincronizar con Sheet
+      postToSheet('upsertRow', { row: [...allData[ri]] });
+      saved++;
+    }
+  });
+  updateKPIs();
+  cancelBultosEdit();
+  renderTable();
+  showToast(`${saved} fila(s) guardadas correctamente`, 'success');
+}
+
+// Parche: renderTable debe marcar las td de BULTOS con data-bultos y data-rowidx
+const _origRenderTable = typeof renderTable === 'function' ? renderTable : null;
 </script>
 </body>
 </html>
