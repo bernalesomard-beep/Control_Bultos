@@ -231,6 +231,7 @@ tailwind.config = {
       </button>
 
       <div class="h-5 w-px bg-outline-variant mx-1"></div>
+      <div class="flex items-center gap-1 text-[11px] text-on-surface-variant">
         <span class="material-symbols-outlined text-[13px]">schedule</span>
         <span id="syncTime">Sin actualizar</span>
       </div>
@@ -392,6 +393,7 @@ tailwind.config = {
       </div>
     </div>
 
+  </div><!-- /p6 content bultos -->
   </div><!-- /sectionBultos -->
 
   <!-- ══ SECCIÓN KPI PEDIDOS ══ -->
@@ -1434,9 +1436,7 @@ const _origRenderTable = typeof renderTable === 'function' ? renderTable : null;
 // ═══════════════════════════════════════════════════════
 // OTIF — CONFIG & ESTADO
 // ═══════════════════════════════════════════════════════
-// OTIF ahora se sirve desde la misma WebApp (acción otif-json)
-// ya no usa el CSV público de Google que tiene CORS bloqueado
-const OTIF_CSV_URL = null; // mantenida por compatibilidad, no se usa
+const OTIF_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQgn1Yp4-QseqM82ZqboVRImdNiFIx5kJLfO8ALa5nml7yqKSi9-HCWygRTHW932b7m06Jq2bG09QJA/pub?gid=1638088894&single=true&output=csv';
 
 // Columnas que NO se muestran en la tabla
 const OTIF_HIDDEN_COLS = ['ID_PED'];
@@ -1500,42 +1500,38 @@ async function loadOtif(){
       Cargando datos OTIF...
     </td></tr>`;
 
-  // Cargar desde la WebApp (misma que Bultos, acción otif-json)
-  try{
-    const resp = await fetch(WEBAPP_URL + '?action=otif-json&t=' + Date.now(), { cache: 'no-store' });
-    if(!resp.ok) throw new Error('HTTP ' + resp.status);
-    const json = await resp.json();
-    if(!json.ok) throw new Error(json.error || 'WebApp error');
+  const urls = [
+    OTIF_CSV_URL,
+    `https://corsproxy.io/?${encodeURIComponent(OTIF_CSV_URL)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(OTIF_CSV_URL)}`,
+    `https://corsproxy.org/?${encodeURIComponent(OTIF_CSV_URL)}`,
+  ];
 
-    if(!json.data || json.data.length === 0){
-      document.getElementById('otifTableBody').innerHTML =
-        `<tr><td colspan="20" class="text-center py-10 text-on-surface-variant">
-          Sin datos en el Sheet OTIF.
-        </td></tr>`;
-      showToast('OTIF: sin datos','info');
-      return;
-    }
+  let csv = null;
+  for(const url of urls){
+    try{
+      const r = await fetch(url, { cache:'no-store', mode:'cors' });
+      if(r.ok){
+        const text = await r.text();
+        if(text && text.trim().length > 10){ csv = text; break; }
+      }
+    } catch(e){ console.warn('[OTIF] falló:', url, e.message); }
+  }
 
-    // Convertir array de objetos a cabeceras + filas
-    otifHeaders = Object.keys(json.data[0]);
-    otifAllData = json.data.map(obj => otifHeaders.map(h => String(obj[h] ?? '').trim()));
-
-    populateOtifFilterOptions();
-    applyOtifFilters();
-
-    const now = new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
-    document.getElementById('otifSyncTime').innerHTML =
-      `<span class="material-symbols-outlined text-[13px]">schedule</span>Actualizado ${now}`;
-    showToast(`OTIF: ${otifAllData.length} registros cargados`,'success');
-
-  } catch(e){
-    console.error('[OTIF] Error:', e.message);
+  if(!csv){
     document.getElementById('otifTableBody').innerHTML =
       `<tr><td colspan="20" class="text-center py-10 text-error font-semibold">
-        No se pudo cargar el Sheet OTIF: ${e.message}
+        No se pudo cargar el Sheet OTIF. Verifique la URL o su conexión.
       </td></tr>`;
-    showToast('Error al cargar datos OTIF: ' + e.message,'error');
+    showToast('Error al cargar datos OTIF','error');
+    return;
   }
+
+  parseOtifCSV(csv);
+  const now = new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('otifSyncTime').innerHTML =
+    `<span class="material-symbols-outlined text-[13px]">schedule</span>Actualizado ${now}`;
+  showToast(`OTIF: ${otifAllData.length} registros cargados`,'success');
 }
 
 function reloadOtif(){
