@@ -1498,21 +1498,25 @@ async function loadOtif(){
       Cargando datos OTIF...
     </td></tr>`;
 
-  const proxies = [
+  const urls = [
+    OTIF_CSV_URL,
     `https://corsproxy.io/?${encodeURIComponent(OTIF_CSV_URL)}`,
     `https://api.allorigins.win/raw?url=${encodeURIComponent(OTIF_CSV_URL)}`,
-    OTIF_CSV_URL
+    `https://corsproxy.org/?${encodeURIComponent(OTIF_CSV_URL)}`,
   ];
 
   let csv = null;
-  for(const url of proxies){
+  for(const url of urls){
     try{
-      const r = await fetch(url, { cache:'no-store' });
-      if(r.ok){ csv = await r.text(); break; }
-    } catch(e){ console.warn('[OTIF] proxy falló:', url); }
+      const r = await fetch(url, { cache:'no-store', mode:'cors' });
+      if(r.ok){
+        const text = await r.text();
+        if(text && text.trim().length > 10){ csv = text; break; }
+      }
+    } catch(e){ console.warn('[OTIF] falló:', url, e.message); }
   }
 
-  if(!csv || csv.trim().length < 10){
+  if(!csv){
     document.getElementById('otifTableBody').innerHTML =
       `<tr><td colspan="20" class="text-center py-10 text-error font-semibold">
         No se pudo cargar el Sheet OTIF. Verifique la URL o su conexión.
