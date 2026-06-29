@@ -4,6 +4,27 @@
 <meta charset="utf-8">
 <meta content="width=device-width, initial-scale=1.0" name="viewport">
 <title>Control de Pedidos - 271 - Logistics Package List</title>
+<style id="otif-styles">
+  /* ── Control de secciones: NUNCA tocar estos con Tailwind ── */
+  div#sectionOtif   { display: none; }
+  div#sectionBultos { display: block; }
+  div#sectionOtif.sec-hidden   { display: none !important; }
+  div#sectionBultos.sec-hidden { display: none !important; }
+  .nav-item-active { background: #1a3a5c !important; color: #fff !important; }
+  .nav-item-active .material-symbols-outlined { color: #fff !important; }
+
+  /* Badge OTIF */
+  .badge-cumplido    { background:#dcfce7;color:#15803d;font-size:10px;font-weight:700;padding:2px 8px;border-radius:3px;letter-spacing:0.06em;text-transform:uppercase }
+  .badge-incumplido  { background:#fee2e2;color:#b91c1c;font-size:10px;font-weight:700;padding:2px 8px;border-radius:3px;letter-spacing:0.06em;text-transform:uppercase }
+  .badge-parcial     { background:#fef9c3;color:#a16207;font-size:10px;font-weight:700;padding:2px 8px;border-radius:3px;letter-spacing:0.06em;text-transform:uppercase }
+
+  /* Tabla OTIF header */
+  #otifTableHeader { background: linear-gradient(135deg,#1a3a5c 0%,#0f2540 100%); }
+  #otifTableHeader th { font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;color:#fff !important;padding:10px 12px;white-space:nowrap }
+  #otifTableBody tr { border-bottom:1px solid #edf0f6; }
+  #otifTableBody tr:last-child { border-bottom:none; }
+  #otifTableBody tr:nth-child(even) { background-color:rgba(26,58,92,0.028); }
+</style>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
@@ -151,13 +172,13 @@ tailwind.config = {
     </div>
   </div>
   <nav class="flex-grow space-y-0.5 px-1">
-    <a class="flex items-center gap-3 px-3 py-2.5 bg-primary text-on-primary rounded-md font-semibold transition-all cursor-pointer text-[13px]">
+    <a id="navBultos" onclick="switchSection('bultos')" class="flex items-center gap-3 px-3 py-2.5 bg-primary text-on-primary rounded-md font-semibold transition-all cursor-pointer text-[13px]">
       <span class="material-symbols-outlined text-[18px]">inventory_2</span>
       <span>Bultos</span>
     </a>
-    <a class="flex items-center gap-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-low rounded-md transition-all cursor-pointer text-[13px]">
+    <a id="navOtif" onclick="switchSection('otif')" class="flex items-center gap-3 px-3 py-2.5 text-on-surface-variant hover:bg-surface-container-low rounded-md transition-all cursor-pointer text-[13px]">
       <span class="material-symbols-outlined text-[18px]">assignment_turned_in</span>
-      <span>OTIF</span>
+      <span>KPI Pedidos</span>
     </a>
   </nav>
   <div class="px-1 pb-2 mt-4 border-t border-outline-variant pt-4">
@@ -174,7 +195,12 @@ tailwind.config = {
 
 <!-- Main -->
 <main class="flex-grow flex flex-col">
-  <!-- Header -->
+  <div id="sectionsWrapper" style="flex:1;min-width:0;">
+
+  <!-- ══ SECCIÓN BULTOS ══ -->
+  <div id="sectionBultos">
+
+  <!-- Header Bultos -->
   <header class="flex justify-between items-center w-full px-6 h-14 z-40 bg-white border-b border-outline-variant top-0 sticky">
     <div class="flex items-center gap-4">
       <button class="md:hidden p-1"><span class="material-symbols-outlined">menu</span></button>
@@ -366,7 +392,129 @@ tailwind.config = {
       </div>
     </div>
 
-  </div>
+  </div><!-- /sectionBultos -->
+
+  <!-- ══ SECCIÓN KPI PEDIDOS ══ -->
+  <div id="sectionOtif" class="sec-hidden" style="display:none">
+
+    <!-- Header OTIF -->
+    <header class="flex justify-between items-center w-full px-6 h-14 z-40 bg-white border-b border-outline-variant top-0 sticky">
+      <div class="flex items-center gap-3">
+        <span class="material-symbols-outlined text-primary text-[20px]">assignment_turned_in</span>
+        <span class="text-[15px] font-bold text-primary">KPI Pedidos — Cumplimiento</span>
+        <span id="otifSyncTime" class="text-[11px] text-on-surface-variant flex items-center gap-1">
+          <span class="material-symbols-outlined text-[13px]">schedule</span>Sin actualizar
+        </span>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="exportOtifFiltered()"
+          class="btn-outline-exec flex items-center gap-1 px-3 py-1.5">
+          <span class="material-symbols-outlined text-[16px]">download</span>Descargar XLS
+        </button>
+        <button onclick="reloadOtif()"
+          class="btn-primary-exec flex items-center gap-1 px-3 py-1.5">
+          <span class="material-symbols-outlined text-[15px]">refresh</span>Actualizar
+        </button>
+      </div>
+    </header>
+
+    <div class="p-6 flex flex-col gap-6 max-w-[1440px] mx-auto w-full">
+
+      <!-- KPIs OTIF -->
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="kpi-card bg-white p-4 rounded-lg border border-outline-variant flex flex-col gap-1">
+          <span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Total Pedidos</span>
+          <span id="otif-kpi-total" class="text-[28px] font-bold text-primary leading-none mt-1">0</span>
+          <div class="flex items-center gap-1 mt-2 pt-2 border-t border-outline-variant/50">
+            <span class="material-symbols-outlined text-[12px] text-on-surface-variant">receipt_long</span>
+            <span class="text-[11px] text-on-surface-variant">registros cargados</span>
+          </div>
+        </div>
+        <div class="kpi-card-green bg-white p-4 rounded-lg border border-outline-variant flex flex-col gap-1">
+          <span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Cumplidos</span>
+          <span id="otif-kpi-cumplidos" class="text-[28px] font-bold text-green-600 leading-none mt-1">0</span>
+          <div class="flex items-center gap-1 mt-2 pt-2 border-t border-outline-variant/50">
+            <span class="material-symbols-outlined text-[12px] text-green-600">check_circle</span>
+            <span id="otif-kpi-pct-cumplidos" class="text-[11px] font-bold text-green-600">0%</span>
+            <span class="text-[11px] text-on-surface-variant">del total</span>
+          </div>
+        </div>
+        <div class="kpi-card-red bg-white p-4 rounded-lg border border-outline-variant flex flex-col gap-1">
+          <span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">Incumplidos</span>
+          <span id="otif-kpi-incumplidos" class="text-[28px] font-bold text-error leading-none mt-1">0</span>
+          <div class="flex items-center gap-1 mt-2 pt-2 border-t border-outline-variant/50">
+            <span class="material-symbols-outlined text-[12px] text-error">cancel</span>
+            <span id="otif-kpi-pct-incumplidos" class="text-[11px] font-bold text-error">0%</span>
+            <span class="text-[11px] text-on-surface-variant">del total</span>
+          </div>
+        </div>
+        <div class="kpi-card-amber bg-white p-4 rounded-lg border border-outline-variant flex flex-col gap-1">
+          <span class="text-[10px] font-bold text-on-surface-variant uppercase tracking-widest">% OTIF</span>
+          <span id="otif-kpi-otif-pct" class="text-[28px] font-bold text-amber-600 leading-none mt-1">0%</span>
+          <div class="flex items-center gap-1 mt-2 pt-2 border-t border-outline-variant/50">
+            <span class="material-symbols-outlined text-[12px] text-amber-600">insights</span>
+            <span class="text-[11px] text-on-surface-variant">indicador global</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filtros OTIF -->
+      <div class="filtros-section p-4 flex flex-wrap items-end gap-4">
+        <!-- Mes - Año -->
+        <div class="flex flex-col gap-1 min-w-[130px]">
+          <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Mes - Año</label>
+          <select id="otifFilterMesAnio" onchange="applyOtifFilters()"
+            class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-[13px] focus:ring-1 focus:ring-primary focus:outline-none">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <!-- Nro de Pedido -->
+        <div class="flex flex-col gap-1 min-w-[140px]">
+          <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Nro de Pedido</label>
+          <input id="otifFilterPedido" oninput="applyOtifFilters()" type="text" placeholder="Ej: 967310..."
+            class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-[13px] focus:ring-1 focus:ring-primary focus:outline-none">
+        </div>
+        <!-- Nro de la Guía -->
+        <div class="flex flex-col gap-1 min-w-[140px]">
+          <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Nro de la Guía</label>
+          <input id="otifFilterGuia" oninput="applyOtifFilters()" type="text" placeholder="Ej: 4709456..."
+            class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-[13px] focus:ring-1 focus:ring-primary focus:outline-none">
+        </div>
+        <!-- Destinatario -->
+        <div class="flex flex-col gap-1 min-w-[180px]">
+          <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Destinatario</label>
+          <input id="otifFilterDest" oninput="applyOtifFilters()" type="text" placeholder="Nombre destinatario..."
+            class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-[13px] focus:ring-1 focus:ring-primary focus:outline-none">
+        </div>
+        <button onclick="clearOtifFilters()" class="btn-primary-exec px-4 py-1.5 h-[34px]">Limpiar</button>
+      </div>
+
+      <!-- Tabla OTIF -->
+      <div class="tabla-container overflow-hidden">
+        <div class="overflow-x-auto overflow-y-auto" style="max-height:500px;min-height:120px;">
+          <table class="w-full text-left border-collapse" id="otifTable">
+            <thead>
+              <tr id="otifTableHeader" class="sticky-header"></tr>
+            </thead>
+            <tbody id="otifTableBody">
+              <tr><td colspan="10" class="text-center py-12 text-on-surface-variant">
+                <span class="material-symbols-outlined text-[48px] block mb-2 opacity-20">cloud_download</span>
+                Cargando datos OTIF...
+              </td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="px-5 py-3 bg-surface-container-low border-t border-outline-variant flex items-center gap-3">
+          <span class="text-[12px] text-on-surface-variant">
+            <span id="otifTotalEntries" class="font-bold text-primary">0</span> registros
+          </span>
+        </div>
+      </div>
+
+    </div>
+  </div><!-- /sectionOtif -->
+
+  </div><!-- /sectionsWrapper -->
 </main>
 
 <!-- Mobile Bottom Nav -->
@@ -382,7 +530,7 @@ tailwind.config = {
     <span class="material-symbols-outlined">download</span><span class="text-[10px]">Descargar</span>
   </button>
   <button onclick="reloadSheet()" class="flex flex-col items-center gap-1 text-on-surface-variant">
-    <span class="material-symbols-outlined">refresh</span><span class="text-[10px]">Sync</span>
+    <span class="material-symbols-outlined">refresh</span><span class="text-[10px]">Actualizado</span>
   </button>
 </nav>
 
@@ -468,7 +616,7 @@ async function loadSheet(){
     if(!json.ok) throw new Error(json.error || 'WebApp error');
     parseJSON(json.data);
     const now = new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
-    document.getElementById('syncTime').textContent = `Sync ${now}`;
+    document.getElementById('syncTime').textContent = `Actualizado ${now}`;
     showToast(`${allData.length} registros cargados`, 'success');
   } catch(e){
     console.warn('[loadSheet] Error:', e.message);
@@ -1113,7 +1261,12 @@ async function postToSheet(action, data, callback){
 // ─────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', loadSheet);
+document.addEventListener('DOMContentLoaded', function(){
+  // Garantizar estado inicial de secciones
+  document.getElementById('sectionBultos').setAttribute('style','display:block');
+  document.getElementById('sectionOtif').setAttribute('style','display:none');
+  loadSheet();
+});
 </script>
 <!-- ── Modal PIN ── -->
 <div id="pinOverlay" class="pin-overlay" style="display:none" onclick="if(event.target===this)closePinModal()">
@@ -1276,6 +1429,311 @@ function saveBultosEdits(){
 
 // Parche: renderTable debe marcar las td de BULTOS con data-bultos y data-rowidx
 const _origRenderTable = typeof renderTable === 'function' ? renderTable : null;
+</script>
+<script>
+// ═══════════════════════════════════════════════════════
+// OTIF — CONFIG & ESTADO
+// ═══════════════════════════════════════════════════════
+const OTIF_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQgn1Yp4-QseqM82ZqboVRImdNiFIx5kJLfO8ALa5nml7yqKSi9-HCWygRTHW932b7m06Jq2bG09QJA/pub?gid=1638088894&single=true&output=csv';
+
+// Columnas que NO se muestran en la tabla
+const OTIF_HIDDEN_COLS = ['ID_PED'];
+
+// Índices de columnas del sheet (0-based, según orden real del CSV)
+// A=ID_PED, B=Mes-Año, C=Fecha Solicitud, D=Fecha Despacho, E=Cliente,
+// F=Nro Pedido, G=Nro Guia, H=Destinatario, I=Tipo Pedido, J=Cant Pedidos,
+// K=Cant Solicitada, L=Cant Entregada, M=Cant Bultos, N=Cumpl Cantidad,
+// O=Indicador Acido, P=Estatus Cumplimiento, Q=Resp Servicio,
+// R=MOTIVO, S=PROCESO, T=SUSTENTO, U=ANALISIS CAUSA, V=ACCIONES,
+// W=FECHA EJECUCION, X=RESPONSABLE, Y=EO
+
+let otifAllData      = [];  // todas las filas
+let otifHeaders      = [];  // cabeceras del CSV
+let otifFiltered     = [];  // filas tras aplicar filtros
+
+// Columnas que actúan como filtro
+const OTIF_FILTER_COLS = {
+  mesAnio : 'Mes - Año',
+  pedido  : 'Nro de Pedido',
+  guia    : 'Nro de la guia',
+  dest    : 'Destinatario',
+};
+
+// ═══════════════════════════════════════════════════════
+// NAVEGACIÓN ENTRE SECCIONES
+// ═══════════════════════════════════════════════════════
+function switchSection(section){
+  const bultos = document.getElementById('sectionBultos');
+  const otif   = document.getElementById('sectionOtif');
+  const navB   = document.getElementById('navBultos');
+  const navO   = document.getElementById('navOtif');
+
+  // Ocultar todo primero
+  bultos.setAttribute('style', 'display:none');
+  otif.setAttribute('style',   'display:none');
+
+  if(section === 'otif'){
+    otif.setAttribute('style', 'display:block');
+    navB.classList.remove('bg-primary','text-on-primary','font-semibold');
+    navB.classList.add('text-on-surface-variant');
+    navO.classList.remove('text-on-surface-variant');
+    navO.classList.add('bg-primary','text-on-primary','font-semibold');
+    if(otifAllData.length === 0) loadOtif();
+  } else {
+    bultos.setAttribute('style', 'display:block');
+    navO.classList.remove('bg-primary','text-on-primary','font-semibold');
+    navO.classList.add('text-on-surface-variant');
+    navB.classList.remove('text-on-surface-variant');
+    navB.classList.add('bg-primary','text-on-primary','font-semibold');
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// CARGA DE DATOS OTIF
+// ═══════════════════════════════════════════════════════
+async function loadOtif(){
+  document.getElementById('otifTableBody').innerHTML =
+    `<tr><td colspan="20" class="text-center py-12 text-on-surface-variant">
+      <span class="material-symbols-outlined text-[40px] block mb-2 opacity-20">cloud_download</span>
+      Cargando datos OTIF...
+    </td></tr>`;
+
+  const proxies = [
+    `https://corsproxy.io/?${encodeURIComponent(OTIF_CSV_URL)}`,
+    `https://api.allorigins.win/raw?url=${encodeURIComponent(OTIF_CSV_URL)}`,
+    OTIF_CSV_URL
+  ];
+
+  let csv = null;
+  for(const url of proxies){
+    try{
+      const r = await fetch(url, { cache:'no-store' });
+      if(r.ok){ csv = await r.text(); break; }
+    } catch(e){ console.warn('[OTIF] proxy falló:', url); }
+  }
+
+  if(!csv || csv.trim().length < 10){
+    document.getElementById('otifTableBody').innerHTML =
+      `<tr><td colspan="20" class="text-center py-10 text-error font-semibold">
+        No se pudo cargar el Sheet OTIF. Verifique la URL o su conexión.
+      </td></tr>`;
+    showToast('Error al cargar datos OTIF','error');
+    return;
+  }
+
+  parseOtifCSV(csv);
+  const now = new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
+  document.getElementById('otifSyncTime').innerHTML =
+    `<span class="material-symbols-outlined text-[13px]">schedule</span>Actualizado ${now}`;
+  showToast(`OTIF: ${otifAllData.length} registros cargados`,'success');
+}
+
+function reloadOtif(){
+  otifAllData = []; otifHeaders = []; otifFiltered = [];
+  showToast('Actualizando datos OTIF...','info');
+  loadOtif();
+}
+
+// ═══════════════════════════════════════════════════════
+// PARSEO CSV OTIF
+// ═══════════════════════════════════════════════════════
+function parseOtifCSV(csv){
+  const lines = csv.split('\n').filter(l => l.trim());
+  if(lines.length < 2){ showToast('CSV OTIF vacío','error'); return; }
+
+  const sep = lines[0].includes('\t') ? '\t' : ',';
+  otifHeaders = splitOtifLine(lines[0], sep).map(h => h.replace(/"/g,'').trim());
+
+  otifAllData = [];
+  for(let i = 1; i < lines.length; i++){
+    const cells = splitOtifLine(lines[i], sep).map(c => c.replace(/"/g,'').trim());
+    if(cells.every(c => !c)) continue;
+    // Rellenar si faltan celdas
+    while(cells.length < otifHeaders.length) cells.push('');
+    otifAllData.push(cells);
+  }
+
+  populateOtifFilterOptions();
+  applyOtifFilters();
+}
+
+function splitOtifLine(line, sep){
+  const r = []; let q = false, c = '';
+  for(let i = 0; i < line.length; i++){
+    const ch = line[i];
+    if(ch === '"'){ q = !q; }
+    else if(ch === sep && !q){ r.push(c); c = ''; }
+    else c += ch;
+  }
+  r.push(c);
+  return r;
+}
+
+// ═══════════════════════════════════════════════════════
+// POBLAR OPCIONES DE FILTROS DINÁMICOS
+// ═══════════════════════════════════════════════════════
+function populateOtifFilterOptions(){
+  const iMes = otifHeaders.findIndex(h => /mes.*año/i.test(h) || /mes\s*-\s*año/i.test(h));
+  const sel  = document.getElementById('otifFilterMesAnio');
+  // Limpiar excepto "Todos"
+  sel.innerHTML = '<option value="">Todos</option>';
+
+  if(iMes >= 0){
+    const vals = [...new Set(otifAllData.map(r => r[iMes]).filter(v => v))].sort();
+    vals.forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v; opt.textContent = v;
+      sel.appendChild(opt);
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// FILTRADO OTIF
+// ═══════════════════════════════════════════════════════
+function applyOtifFilters(){
+  const fMes    = document.getElementById('otifFilterMesAnio').value.toLowerCase();
+  const fPed    = document.getElementById('otifFilterPedido').value.toLowerCase().trim();
+  const fGuia   = document.getElementById('otifFilterGuia').value.toLowerCase().trim();
+  const fDest   = document.getElementById('otifFilterDest').value.toLowerCase().trim();
+
+  const iMes  = otifHeaders.findIndex(h => /mes.*año/i.test(h) || /mes\s*-\s*año/i.test(h));
+  const iPed  = otifHeaders.findIndex(h => /nro.*pedido/i.test(h));
+  const iGuia = otifHeaders.findIndex(h => /nro.*guia/i.test(h) || /nro.*guía/i.test(h));
+  const iDest = otifHeaders.findIndex(h => /destinatario/i.test(h));
+
+  otifFiltered = otifAllData.filter(row => {
+    if(fMes  && iMes  >= 0 && !row[iMes].toLowerCase().includes(fMes))    return false;
+    if(fPed  && iPed  >= 0 && !row[iPed].toLowerCase().includes(fPed))    return false;
+    if(fGuia && iGuia >= 0 && !row[iGuia].toLowerCase().includes(fGuia))  return false;
+    if(fDest && iDest >= 0 && !row[iDest].toLowerCase().includes(fDest))  return false;
+    return true;
+  });
+
+  updateOtifKPIs();
+  renderOtifTable();
+}
+
+function clearOtifFilters(){
+  document.getElementById('otifFilterMesAnio').value = '';
+  ['otifFilterPedido','otifFilterGuia','otifFilterDest'].forEach(id =>
+    document.getElementById(id).value = '');
+  applyOtifFilters();
+}
+
+// ═══════════════════════════════════════════════════════
+// KPIs OTIF
+// ═══════════════════════════════════════════════════════
+function updateOtifKPIs(){
+  const iEstatus = otifHeaders.findIndex(h => /estatus.*cumplimiento/i.test(h));
+
+  const total       = otifFiltered.length;
+  const cumplidos   = iEstatus >= 0
+    ? otifFiltered.filter(r => /cumplido/i.test(r[iEstatus])).length
+    : 0;
+  const incumplidos = total - cumplidos;
+  const pct         = total > 0 ? Math.round((cumplidos / total) * 100) : 0;
+
+  document.getElementById('otif-kpi-total').textContent        = total.toLocaleString('es-PE');
+  document.getElementById('otif-kpi-cumplidos').textContent    = cumplidos.toLocaleString('es-PE');
+  document.getElementById('otif-kpi-incumplidos').textContent  = incumplidos.toLocaleString('es-PE');
+  document.getElementById('otif-kpi-otif-pct').textContent     = pct + '%';
+  document.getElementById('otif-kpi-pct-cumplidos').textContent   = pct + '%';
+  document.getElementById('otif-kpi-pct-incumplidos').textContent = (100 - pct) + '%';
+}
+
+// ═══════════════════════════════════════════════════════
+// RENDER TABLA OTIF
+// ═══════════════════════════════════════════════════════
+function renderOtifTable(){
+  // ── Cabeceras ──
+  const thead = document.getElementById('otifTableHeader');
+  thead.innerHTML = '';
+  const visibleCols = otifHeaders
+    .map((h, i) => ({ h, i }))
+    .filter(({ h }) => !OTIF_HIDDEN_COLS.some(hid => h.trim().toUpperCase() === hid.toUpperCase()));
+
+  visibleCols.forEach(({ h }) => {
+    const th = document.createElement('th');
+    th.textContent = h;
+    th.className = 'px-3 py-2.5 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap text-white';
+    thead.appendChild(th);
+  });
+
+  // ── Cuerpo ──
+  const tbody = document.getElementById('otifTableBody');
+  tbody.innerHTML = '';
+
+  if(!otifFiltered.length){
+    tbody.innerHTML = `<tr><td colspan="${visibleCols.length}" class="text-center py-12 text-on-surface-variant">
+      <span class="material-symbols-outlined text-[48px] block mb-2 opacity-30">search_off</span>
+      Sin resultados</td></tr>`;
+    document.getElementById('otifTotalEntries').textContent = '0';
+    return;
+  }
+
+  const iEstatus = otifHeaders.findIndex(h => /estatus.*cumplimiento/i.test(h));
+
+  otifFiltered.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.className = 'hover:bg-secondary-fixed-dim/20 transition-colors';
+
+    visibleCols.forEach(({ h, i }) => {
+      const td = document.createElement('td');
+      td.className = 'px-3 py-2.5 text-[12px] text-on-surface whitespace-nowrap';
+      const val = row[i] || '—';
+
+      // Badge para Estatus de Cumplimiento
+      if(i === iEstatus){
+        const cls = /cumplido/i.test(val) ? 'badge-cumplido' :
+                    /incumplido/i.test(val) ? 'badge-incumplido' : 'badge-parcial';
+        td.innerHTML = `<span class="${cls}">${val}</span>`;
+      } else {
+        td.textContent = val;
+      }
+      tr.appendChild(td);
+    });
+
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('otifTotalEntries').textContent =
+    otifFiltered.length.toLocaleString('es-PE');
+}
+
+// ═══════════════════════════════════════════════════════
+// EXPORTAR OTIF A XLS (según filtros actuales)
+// ═══════════════════════════════════════════════════════
+function exportOtifFiltered(){
+  if(!otifFiltered.length){ showToast('Sin datos para exportar','error'); return; }
+
+  try{
+    const visibleCols = otifHeaders
+      .map((h, i) => ({ h, i }))
+      .filter(({ h }) => !OTIF_HIDDEN_COLS.some(hid => h.trim().toUpperCase() === hid.toUpperCase()));
+
+    const heads = visibleCols.map(({ h }) => h);
+    const rows  = otifFiltered.map(row => visibleCols.map(({ i }) => row[i] || ''));
+
+    const ws = XLSX.utils.aoa_to_sheet([heads, ...rows]);
+    ws['!cols'] = heads.map(h => {
+      if(/destinatario/i.test(h))           return { wch: 38 };
+      if(/causa|acciones|sustento/i.test(h)) return { wch: 30 };
+      if(/fecha/i.test(h))                  return { wch: 18 };
+      return { wch: 16 };
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'OTIF');
+
+    const d = new Date().toISOString().slice(0,10).replace(/-/g,'');
+    XLSX.writeFile(wb, `otif_cumplimiento_${d}.xlsx`, { compression: true });
+    showToast('✓ OTIF exportado correctamente','success');
+  } catch(err){
+    showToast('Error al exportar: ' + err.message,'error');
+    console.error(err);
+  }
+}
 </script>
 </body>
 </html>
