@@ -5,11 +5,12 @@
 <meta content="width=device-width, initial-scale=1.0" name="viewport">
 <title>Control de Pedidos - 271 - Logistics Package List</title>
 <style id="otif-styles">
-  /* ── Control de secciones: NUNCA tocar estos con Tailwind ── */
-  div#sectionOtif   { display: none; }
-  div#sectionBultos { display: block; }
-  div#sectionOtif.sec-hidden   { display: none !important; }
-  div#sectionBultos.sec-hidden { display: none !important; }
+  /* ── Control de secciones ── */
+  div#sectionOtif,
+  div#sectionBultos { display: none; }
+
+  div#sectionOtif.sec-visible,
+  div#sectionBultos.sec-visible { display: block !important; }
   .nav-item-active { background: #1a3a5c !important; color: #fff !important; }
   .nav-item-active .material-symbols-outlined { color: #fff !important; }
 
@@ -397,7 +398,7 @@ tailwind.config = {
   </div><!-- /sectionBultos -->
 
   <!-- ══ SECCIÓN KPI PEDIDOS ══ -->
-  <div id="sectionOtif" class="sec-hidden">
+  <div id="sectionOtif">
 
     <!-- Header OTIF -->
     <header class="flex justify-between items-center w-full px-6 h-14 z-40 bg-white border-b border-outline-variant top-0 sticky">
@@ -1265,8 +1266,8 @@ async function postToSheet(action, data, callback){
 // ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function(){
   // Garantizar estado inicial de secciones
-  document.getElementById('sectionBultos').classList.remove('sec-hidden');
-  document.getElementById('sectionOtif').classList.add('sec-hidden');
+  document.getElementById('sectionBultos').classList.add('sec-visible');
+  document.getElementById('sectionOtif').classList.remove('sec-visible');
   loadSheet();
 });
 </script>
@@ -1470,19 +1471,19 @@ function switchSection(section){
   const navB   = document.getElementById('navBultos');
   const navO   = document.getElementById('navOtif');
 
-  // Ocultar todo — quitar style inline y controlar con clase sec-hidden
-  bultos.classList.add('sec-hidden');    bultos.removeAttribute('style');
-  otif.classList.add('sec-hidden');      otif.removeAttribute('style');
+  // Ocultar todo — quitar sec-visible de ambas
+  bultos.classList.remove('sec-visible');
+  otif.classList.remove('sec-visible');
 
   if(section === 'otif'){
-    otif.classList.remove('sec-hidden');
+    otif.classList.add('sec-visible');
     navB.classList.remove('bg-primary','text-on-primary','font-semibold');
     navB.classList.add('text-on-surface-variant');
     navO.classList.remove('text-on-surface-variant');
     navO.classList.add('bg-primary','text-on-primary','font-semibold');
     if(otifAllData.length === 0) loadOtif();
   } else {
-    bultos.classList.remove('sec-hidden');
+    bultos.classList.add('sec-visible');
     navO.classList.remove('bg-primary','text-on-primary','font-semibold');
     navO.classList.add('text-on-surface-variant');
     navB.classList.remove('text-on-surface-variant');
