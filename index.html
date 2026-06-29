@@ -397,7 +397,7 @@ tailwind.config = {
   </div><!-- /sectionBultos -->
 
   <!-- ══ SECCIÓN KPI PEDIDOS ══ -->
-  <div id="sectionOtif" class="sec-hidden" style="display:none">
+  <div id="sectionOtif" class="sec-hidden">
 
     <!-- Header OTIF -->
     <header class="flex justify-between items-center w-full px-6 h-14 z-40 bg-white border-b border-outline-variant top-0 sticky">
@@ -1265,8 +1265,8 @@ async function postToSheet(action, data, callback){
 // ─────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', function(){
   // Garantizar estado inicial de secciones
-  document.getElementById('sectionBultos').setAttribute('style','display:block');
-  document.getElementById('sectionOtif').setAttribute('style','display:none');
+  document.getElementById('sectionBultos').classList.remove('sec-hidden');
+  document.getElementById('sectionOtif').classList.add('sec-hidden');
   loadSheet();
 });
 </script>
@@ -1470,19 +1470,19 @@ function switchSection(section){
   const navB   = document.getElementById('navBultos');
   const navO   = document.getElementById('navOtif');
 
-  // Ocultar todo primero
-  bultos.setAttribute('style', 'display:none');
-  otif.setAttribute('style',   'display:none');
+  // Ocultar todo — quitar style inline y controlar con clase sec-hidden
+  bultos.classList.add('sec-hidden');    bultos.removeAttribute('style');
+  otif.classList.add('sec-hidden');      otif.removeAttribute('style');
 
   if(section === 'otif'){
-    otif.setAttribute('style', 'display:block');
+    otif.classList.remove('sec-hidden');
     navB.classList.remove('bg-primary','text-on-primary','font-semibold');
     navB.classList.add('text-on-surface-variant');
     navO.classList.remove('text-on-surface-variant');
     navO.classList.add('bg-primary','text-on-primary','font-semibold');
     if(otifAllData.length === 0) loadOtif();
   } else {
-    bultos.setAttribute('style', 'display:block');
+    bultos.classList.remove('sec-hidden');
     navO.classList.remove('bg-primary','text-on-primary','font-semibold');
     navO.classList.add('text-on-surface-variant');
     navB.classList.remove('text-on-surface-variant');
