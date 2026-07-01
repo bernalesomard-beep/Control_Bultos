@@ -550,7 +550,7 @@ const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQgn1Yp4-
 const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycby__r1l16nGVaY5H_ZogAgVsFhvW2T7d0fuD0eKZxCN0dYcmmF-TRbGTLDOI98RZQZ2sw/exec';
 
 // Columnas reales del Sheet — ID BULTOS se oculta en la vista, MES se calcula
-const SHEET_COLS   = ['ID BULTOS','BPCS','DOCUMENTO','DESTINATARIO','FECHA CITA','CANTIDAD','BULTOS','USUARIO','REGISTRO'];
+const SHEET_COLS   = ['ID BULTOS','FECHA PEDIDO','BPCS','DOCUMENTO','DESTINATARIO','FECHA CITA','CANTIDAD','BULTOS','USUARIO','REGISTRO'];
 // Columna virtual añadida por la app
 const VIRTUAL_STATUS = 'STATUS';
 
@@ -591,6 +591,7 @@ function fmtStorage(v){
   return m?`${m[3]}${m[2]}${m[1]}`:String(v).replace(/\D/g,'');
 }
 function isFechaCol(h){ return /fecha/i.test(h); }
+function isFechaCitaCol(h){ return /fecha.*cita/i.test(h); } // MES/filtros se basan en Fecha Cita
 
 // ─────────────────────────────────────────
 // STATUS VIRTUAL: Conforme si BULTOS > 0, Pendiente si no
@@ -676,13 +677,13 @@ function splitLine(line,sep){
 }
 
 function loadDemoData(){
-  columnHeaders=['ID BULTOS','BPCS','DOCUMENTO','DESTINATARIO','FECHA CITA','CANTIDAD','BULTOS','USUARIO','REGISTRO'];
+  columnHeaders=['ID BULTOS','FECHA PEDIDO','BPCS','DOCUMENTO','DESTINATARIO','FECHA CITA','CANTIDAD','BULTOS','USUARIO','REGISTRO'];
   allData=[
-    ['1','967310','4709456','IMPORTACIONES GYA S.A.C','20260625','36','3','J.PEREZ','14:22:01'],
-    ['2','967311','4709510','COSMETIC PLANET S.A.C.','20260625','24','','J.PEREZ','14:23:45'],
-    ['3','967312','4709921','NIMER DE LA CRUZ VARGAS','20260625','26','','M.GOMEZ','14:25:12'],
-    ['4','967313','4710404','LOIDA TORRES CAMPOS','20260625','24','2','M.GOMEZ','14:28:30'],
-    ['5','968159','4900010998','GRUPO KAMILL S.A.C','20260625','156','8','R.SANCHEZ','15:01:44'],
+    ['1','20260623','967310','4709456','IMPORTACIONES GYA S.A.C','20260625','36','3','J.PEREZ','14:22:01'],
+    ['2','20260623','967311','4709510','COSMETIC PLANET S.A.C.','20260625','24','','J.PEREZ','14:23:45'],
+    ['3','20260623','967312','4709921','NIMER DE LA CRUZ VARGAS','20260625','26','','M.GOMEZ','14:25:12'],
+    ['4','20260623','967313','4710404','LOIDA TORRES CAMPOS','20260625','24','2','M.GOMEZ','14:28:30'],
+    ['5','20260623','968159','4900010998','GRUPO KAMILL S.A.C','20260625','156','8','R.SANCHEZ','15:01:44'],
   ];
   recalcIds();
   applyFilters();
@@ -908,7 +909,7 @@ function exportSelected(){
 // ─────────────────────────────────────────
 function _doExport(rows, baseName){
   try{
-    const iF = columnHeaders.findIndex(h => isFechaCol(h));
+    const iF = columnHeaders.findIndex(h => isFechaCitaCol(h));
 
     // Cabeceras: columnas del sheet (sin ID BULTOS oculto en vista, pero sí en export) + MES + STATUS
     const heads = [...columnHeaders, 'MES', VIRTUAL_STATUS];
@@ -961,8 +962,8 @@ function _doExport(rows, baseName){
 function downloadTemplate(){
   try{
     // Columnas de la plantilla (sin ID BULTOS que es autogenerado)
-    const templateCols = ['BPCS','DOCUMENTO','DESTINATARIO','FECHA CITA','CANTIDAD','BULTOS','USUARIO','REGISTRO'];
-    const exampleRow   = ['967310','4709456','IMPORTACIONES GYA S.A.C','20260625','36','3','J.PEREZ','14:22:01'];
+    const templateCols = ['FECHA PEDIDO','BPCS','DOCUMENTO','DESTINATARIO','FECHA CITA','CANTIDAD','BULTOS','USUARIO','REGISTRO'];
+    const exampleRow   = ['20260623','967310','4709456','IMPORTACIONES GYA S.A.C','20260625','36','3','J.PEREZ','14:22:01'];
 
     const ws = XLSX.utils.aoa_to_sheet([templateCols, exampleRow]);
 
@@ -1001,7 +1002,7 @@ function applyFilters(){
   const iB  = columnHeaders.findIndex(h=>/bpcs/i.test(h));
   const iD  = columnHeaders.findIndex(h=>/documento/i.test(h));
   const iDe = columnHeaders.findIndex(h=>/destinatario/i.test(h));
-  const iF  = columnHeaders.findIndex(h=>isFechaCol(h));
+  const iF  = columnHeaders.findIndex(h=>isFechaCitaCol(h));
 
   // chartData: SOLO filtros de Mes y Rango de Fechas → alimenta KPIs
   chartData = allData.filter(row=>{
@@ -1093,7 +1094,7 @@ function renderTable(){
   }
 
   const iId  = columnHeaders.findIndex(h=>/id bultos/i.test(h));
-  const iF   = columnHeaders.findIndex(h=>isFechaCol(h));
+  const iF   = columnHeaders.findIndex(h=>isFechaCitaCol(h));
 
   filteredData.forEach((row)=>{
     const globalIdx=allData.indexOf(row);
