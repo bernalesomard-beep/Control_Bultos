@@ -800,7 +800,7 @@ function importFromXLS(event){
         return;
       }
 
-      // ── PASO 1: Traer datos frescos del Sheet (via WebApp, no CSV cacheado) ──
+      // ── PASO 1: Traer datos frescos del Sheet (solo para VISTA PREVIA local) ──
       showToast('Obteniendo datos actuales del Sheet...', 'info');
       let baseData = [...allData]; // fallback: usar lo que ya tenemos en memoria
 
@@ -825,7 +825,7 @@ function importFromXLS(event){
         }
       }
 
-      // ── PASO 2: Merge por BPCS + DOCUMENTO ──
+      // ── PASO 2: Merge SOLO para la vista previa local (no se envía al Sheet) ──
       const idxBpcs = expectedOrder.indexOf('BPCS');
       const idxDoc  = expectedOrder.indexOf('DOCUMENTO');
 
@@ -851,21 +851,25 @@ function importFromXLS(event){
         }
       });
 
-      // ── PASO 3: Actualizar estado local ──
+      // ── PASO 3: Actualizar estado local (solo para que se vea al instante) ──
       allData = baseData;
       recalcIds();
       selectedRows.clear();
       applyFilters();
       showToast(`✓ ${insertados} nuevos, ${actualizados} actualizados`, 'success');
 
-      // ── PASO 4: Enviar TODO al Sheet vía POST con payload en URL ──
+      // ── PASO 4: Enviar SOLO las filas del Excel (newData) al Sheet ──
+      // El Apps Script decide por sí mismo, contra la hoja real, si cada fila
+      // es un update (BPCS+DOCUMENTO ya existe) o un insert (fila nueva).
+      // NO se reenvía el dataset completo, así nunca se reescribe el resto de la hoja.
       if(WEBAPP_URL){
         showToast('Sincronizando con el Sheet...', 'info');
         try{
-          const payload = encodeURIComponent(JSON.stringify({ action: 'bulkImport', rows: allData }));
-          await fetch(WEBAPP_URL + '?payload=' + payload, {
+          const payload = JSON.stringify({ action: 'bulkImport', rows: newData });
+          await fetch(WEBAPP_URL, {
             method : 'POST',
-            mode   : 'no-cors'
+            mode   : 'no-cors',
+            body   : payload   // texto plano → e.postData.contents en Apps Script
           });
           showToast('✓ Datos enviados al Sheet correctamente', 'success');
         } catch(postErr){
@@ -1124,11 +1128,11 @@ function renderTable(){
       const td=document.createElement('td');
       const isBultos = /^bultos$/i.test(columnHeaders[ci]);
       if(isFechaCol(columnHeaders[ci])){
-        td.className='px-4 py-2.5 editable-cell font-mono text-[12px] text-on-surface-variant';
+        td.className='px-4 py-2.5 font-mono text-[12px] text-on-surface-variant'+(editBultosMode?' editable-cell':'');
         td.textContent=fmtDisplay(cell);
         td.addEventListener('dblclick',()=>editCell(td,row,ci,true));
       } else {
-        td.className='px-4 py-2.5 editable-cell text-[13px]';
+        td.className='px-4 py-2.5 text-[13px]'+(editBultosMode?' editable-cell':'');
         td.textContent=cell||'—';
         td.addEventListener('dblclick',()=>editCell(td,row,ci,false));
       }
@@ -1160,6 +1164,10 @@ function renderTable(){
 // EDICIÓN INLINE
 // ─────────────────────────────────────────
 function editCell(td,row,ci,isFecha){
+  if(!editBultosMode){
+    showToast('Presiona "Editar Bultos" para habilitar la edición', 'info');
+    return;
+  }
   const orig=row[ci];
   const disp=isFecha?fmtDisplay(orig):orig;
   td.innerHTML='';
