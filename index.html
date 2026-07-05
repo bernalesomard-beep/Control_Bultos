@@ -128,6 +128,27 @@ tailwind.config = {
   .pin-cancel:hover{background:#e4e9f0}
   .pin-confirm{background:#1a3a5c;color:#fff;border:none}
   .pin-confirm:hover{background:#142e4a}
+
+  /* ── Modal Subir XLS ── */
+  .upload-overlay{position:fixed;inset:0;background:rgba(10,20,35,0.55);z-index:500;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(3px)}
+  .upload-box{background:#fff;border-radius:12px;width:420px;max-width:92vw;box-shadow:0 20px 60px rgba(0,0,0,0.28);overflow:hidden}
+  .upload-header{background:#0f2745;color:#fff;padding:18px 20px;display:flex;align-items:flex-start;gap:12px}
+  .upload-header .material-symbols-outlined{font-size:22px;margin-top:2px}
+  .upload-header h2{font-size:15px;font-weight:700;margin:0}
+  .upload-header p{font-size:11.5px;color:#b9c6d8;margin:2px 0 0}
+  .upload-close{background:none;border:none;color:#cfd9e6;cursor:pointer;margin-left:auto;font-size:18px;line-height:1;padding:2px}
+  .upload-close:hover{color:#fff}
+  .upload-body{padding:22px 20px}
+  .upload-dropzone{border:2px dashed #c4cdd9;border-radius:10px;padding:34px 16px;text-align:center;cursor:pointer;transition:all 0.2s;color:#5a6b80}
+  .upload-dropzone:hover, .upload-dropzone.dragover{border-color:#1a3a5c;background:#f0f5fb}
+  .upload-dropzone .material-symbols-outlined{font-size:40px;color:#8a9ab0;display:block;margin:0 auto 8px}
+  .upload-dropzone p{margin:2px 0;font-size:13px;font-weight:600;color:#3a4d62}
+  .upload-dropzone .upload-hint{font-size:11px;font-weight:400;color:#8a9ab0}
+  .upload-filename{margin-top:12px;font-size:12px;font-weight:600;color:#1a3a5c;background:#f0f5fb;border-radius:6px;padding:8px 10px}
+  .upload-error{margin-top:12px;font-size:12px;font-weight:600;color:#c0392b;background:#fdecea;border-radius:6px;padding:8px 10px;line-height:1.4}
+  .upload-footer{display:flex;gap:10px;padding:16px 20px;border-top:1px solid #e8ecf1}
+  .upload-footer button{flex:1;padding:9px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;transition:all 0.2s}
+  .upload-footer .pin-confirm:disabled{background:#a8b6c6;cursor:not-allowed}
   /* ── Modo edición BULTOS activo ── */
   .bultos-edit-mode{background:#fffbeb !important;outline:2px solid #d97706 !important;border-radius:3px;cursor:text !important}
   .bultos-edit-mode:hover{background:#fef3c7 !important}
@@ -243,11 +264,11 @@ tailwind.config = {
 
       <div class="h-5 w-px bg-outline-variant mx-1"></div>
 
-      <button onclick="document.getElementById('importXlsInput').click()"
+      <button onclick="openUploadModal()"
         class="btn-outline-exec flex items-center gap-1 px-3 py-1.5">
         <span class="material-symbols-outlined text-[16px]">upload</span>Subir XLS
       </button>
-      <input id="importXlsInput" type="file" accept=".xls,.xlsx,.xlsb,.xlsm" class="hidden" onchange="importFromXLS(event)">
+      <input id="importXlsInput" type="file" accept=".xls,.xlsx,.xlsb,.xlsm" class="hidden" onchange="handleFileSelected(event.target.files[0])">
       <button onclick="downloadTemplate()" title="Descargar plantilla vacía para subir datos"
         class="btn-outline-exec flex items-center gap-1 px-3 py-1.5" style="color:#1a3a5c;border-color:#a8c4e0">
         <span class="material-symbols-outlined text-[16px]">table_view</span>Plantilla
@@ -526,7 +547,7 @@ tailwind.config = {
     <span class="material-symbols-outlined">inventory_2</span>
     <span class="text-[10px]">Bultos</span>
   </a>
-  <button onclick="document.getElementById('importXlsInput').click()" class="flex flex-col items-center gap-1 text-on-surface-variant">
+  <button onclick="openUploadModal()" class="flex flex-col items-center gap-1 text-on-surface-variant">
     <span class="material-symbols-outlined">upload</span><span class="text-[10px]">Subir</span>
   </button>
   <button onclick="exportToXLS()" class="flex flex-col items-center gap-1 text-on-surface-variant">
@@ -759,13 +780,67 @@ function editHeader(th,idx){
 }
 
 // ─────────────────────────────────────────
-// IMPORTAR XLS / XLSX
-// Flujo: 1) Lee el XLS  2) Trae datos frescos del WebApp
-//        3) Merge       4) Envia todo al Sheet vía POST
+// IMPORTAR XLS / XLSX — vía Modal
+// Flujo: 1) Selecciona archivo (click o drag&drop)
+//        2) Valida BPCS duplicado (dentro del archivo Y contra el Sheet)
+//        3) Si hay duplicados: bloquea y avisa. Si no: sincroniza.
 // ─────────────────────────────────────────
-function importFromXLS(event){
-  const file = event.target.files[0];
+let pendingXlsFile = null;
+
+function openUploadModal(){
+  pendingXlsFile = null;
+  document.getElementById('uploadFileName').style.display = 'none';
+  document.getElementById('uploadFileName').textContent = '';
+  document.getElementById('uploadError').style.display = 'none';
+  document.getElementById('uploadError').textContent = '';
+  document.getElementById('uploadSendBtn').disabled = true;
+  document.getElementById('uploadDropzone').classList.remove('dragover');
+  document.getElementById('importXlsInput').value = '';
+  document.getElementById('uploadOverlay').style.display = 'flex';
+}
+
+function closeUploadModal(){
+  document.getElementById('uploadOverlay').style.display = 'none';
+}
+
+function handleFileSelected(file){
   if(!file) return;
+  if(!/\.(xls|xlsx|xlsb|xlsm)$/i.test(file.name)){
+    showUploadError('Solo se aceptan archivos .xls o .xlsx');
+    return;
+  }
+  pendingXlsFile = file;
+  document.getElementById('uploadError').style.display = 'none';
+  document.getElementById('uploadFileName').textContent = '📄 ' + file.name;
+  document.getElementById('uploadFileName').style.display = 'block';
+  document.getElementById('uploadSendBtn').disabled = false;
+}
+
+function showUploadError(msg){
+  const err = document.getElementById('uploadError');
+  err.textContent = msg;
+  err.style.display = 'block';
+}
+
+// Drag & drop
+(function initDropzone(){
+  document.addEventListener('DOMContentLoaded', () => {
+    const dz = document.getElementById('uploadDropzone');
+    if(!dz) return;
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+    dz.addEventListener('drop', e => {
+      e.preventDefault();
+      dz.classList.remove('dragover');
+      if(e.dataTransfer.files && e.dataTransfer.files[0]) handleFileSelected(e.dataTransfer.files[0]);
+    });
+  });
+})();
+
+async function confirmUploadXLS(){
+  if(!pendingXlsFile) return;
+  const file = pendingXlsFile;
+  document.getElementById('uploadSendBtn').disabled = true;
   showToast('Leyendo archivo...', 'info');
 
   const reader = new FileReader();
@@ -777,15 +852,13 @@ function importFromXLS(event){
       const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:'', blankrows:false });
 
       if(!rows || rows.length < 2){
-        showToast('El archivo está vacío o no tiene datos', 'error');
-        event.target.value = '';
+        showUploadError('El archivo está vacío o no tiene datos');
+        document.getElementById('uploadSendBtn').disabled = false;
         return;
       }
 
-      const fileHeads   = rows[0].map(h => String(h ?? '').trim());
-      const IGNORAR     = /^(status|mes)$/i;
+      const fileHeads     = rows[0].map(h => String(h ?? '').trim());
       const expectedOrder = [...SHEET_COLS];
-      columnHeaders     = expectedOrder;
 
       const newData = rows.slice(1)
         .filter(r => r.some(c => String(c ?? '').trim() !== ''))
@@ -795,14 +868,14 @@ function importFromXLS(event){
         }));
 
       if(newData.length === 0){
-        showToast('El archivo no tiene filas con datos', 'error');
-        event.target.value = '';
+        showUploadError('El archivo no tiene filas con datos');
+        document.getElementById('uploadSendBtn').disabled = false;
         return;
       }
 
-      // ── PASO 1: Traer datos frescos del Sheet (solo para VISTA PREVIA local) ──
-      showToast('Obteniendo datos actuales del Sheet...', 'info');
-      let baseData = [...allData]; // fallback: usar lo que ya tenemos en memoria
+      // ── Traer datos frescos del Sheet (para validar duplicados y vista previa) ──
+      showToast('Verificando pedidos (BPCS)...', 'info');
+      let baseData = [...allData]; // fallback: memoria local
 
       if(WEBAPP_URL){
         try{
@@ -825,9 +898,41 @@ function importFromXLS(event){
         }
       }
 
-      // ── PASO 2: Merge SOLO para la vista previa local (no se envía al Sheet) ──
       const idxBpcs = expectedOrder.indexOf('BPCS');
       const idxDoc  = expectedOrder.indexOf('DOCUMENTO');
+
+      // ── VALIDACIÓN: BPCS (número de pedido) duplicado ──
+      // 1) Duplicado dentro del mismo archivo   2) Duplicado contra el Sheet
+      const codigosArchivo = {};
+      const dupEnArchivo    = new Set();
+      newData.forEach(row => {
+        const code = String(row[idxBpcs]).trim();
+        if(!code) return;
+        if(codigosArchivo[code]) dupEnArchivo.add(code);
+        codigosArchivo[code] = true;
+      });
+
+      const codigosSheet = new Set(
+        baseData.map(r => String(r[idxBpcs]).trim()).filter(Boolean)
+      );
+      const dupContraSheet = new Set();
+      newData.forEach(row => {
+        const code = String(row[idxBpcs]).trim();
+        if(code && codigosSheet.has(code)) dupContraSheet.add(code);
+      });
+
+      const todosDuplicados = Array.from(new Set([...dupEnArchivo, ...dupContraSheet]));
+
+      if(todosDuplicados.length > 0){
+        showUploadError(
+          `⚠ El número de pedido (BPCS) ${todosDuplicados.length > 1 ? 'ya está duplicado' : 'ya está duplicado'}: ${todosDuplicados.join(', ')}. Corrige el archivo e inténtalo de nuevo.`
+        );
+        document.getElementById('uploadSendBtn').disabled = false;
+        return; // ⛔ No se sube nada
+      }
+
+      // ── Sin duplicados: continuar con Merge (vista previa) + Sync ──
+      columnHeaders = expectedOrder;
 
       const existingMap = {};
       baseData.forEach((row, i) => {
@@ -841,7 +946,7 @@ function importFromXLS(event){
       newData.forEach(row => {
         const key = String(row[idxBpcs]).trim() + '|' + String(row[idxDoc]).trim();
         if(existingMap.hasOwnProperty(key)){
-          const origId = baseData[existingMap[key]][0]; // preservar ID
+          const origId = baseData[existingMap[key]][0];
           baseData[existingMap[key]] = [...row];
           baseData[existingMap[key]][0] = origId;
           actualizados++;
@@ -851,17 +956,13 @@ function importFromXLS(event){
         }
       });
 
-      // ── PASO 3: Actualizar estado local (solo para que se vea al instante) ──
       allData = baseData;
       recalcIds();
       selectedRows.clear();
       applyFilters();
       showToast(`✓ ${insertados} nuevos, ${actualizados} actualizados`, 'success');
 
-      // ── PASO 4: Enviar SOLO las filas del Excel (newData) al Sheet ──
-      // El Apps Script decide por sí mismo, contra la hoja real, si cada fila
-      // es un update (BPCS+DOCUMENTO ya existe) o un insert (fila nueva).
-      // NO se reenvía el dataset completo, así nunca se reescribe el resto de la hoja.
+      // ── Enviar SOLO las filas del Excel (newData) al Sheet ──
       if(WEBAPP_URL){
         showToast('Sincronizando con el Sheet...', 'info');
         try{
@@ -869,7 +970,7 @@ function importFromXLS(event){
           await fetch(WEBAPP_URL, {
             method : 'POST',
             mode   : 'no-cors',
-            body   : payload   // texto plano → e.postData.contents en Apps Script
+            body   : payload
           });
           showToast('✓ Datos enviados al Sheet correctamente', 'success');
         } catch(postErr){
@@ -877,16 +978,18 @@ function importFromXLS(event){
         }
       }
 
+      closeUploadModal();
+
     } catch(err){
-      showToast('Error al leer el archivo: ' + err.message, 'error');
+      showUploadError('Error al leer el archivo: ' + err.message);
+      document.getElementById('uploadSendBtn').disabled = false;
       console.error(err);
     }
-    event.target.value = '';
   };
 
   reader.onerror = function(){
-    showToast('No se pudo leer el archivo', 'error');
-    event.target.value = '';
+    showUploadError('No se pudo leer el archivo');
+    document.getElementById('uploadSendBtn').disabled = false;
   };
 
   reader.readAsArrayBuffer(file);
@@ -1299,6 +1402,34 @@ document.addEventListener('DOMContentLoaded', function(){
     </div>
   </div>
 </div>
+
+<!-- ── Modal Subir XLS ── -->
+<div id="uploadOverlay" class="upload-overlay" style="display:none" onclick="if(event.target===this)closeUploadModal()">
+  <div class="upload-box">
+    <div class="upload-header">
+      <span class="material-symbols-outlined">upload_file</span>
+      <div>
+        <h2>Subir Información — Bultos</h2>
+        <p>Archivo .xls con el formato de la plantilla</p>
+      </div>
+      <button class="upload-close" onclick="closeUploadModal()">✕</button>
+    </div>
+    <div class="upload-body">
+      <div id="uploadDropzone" class="upload-dropzone" onclick="document.getElementById('importXlsInput').click()">
+        <span class="material-symbols-outlined">cloud_upload</span>
+        <p>Haz clic o arrastra tu archivo .xls aquí</p>
+        <p class="upload-hint">Solo archivos .xls o .xlsx</p>
+      </div>
+      <div id="uploadFileName" class="upload-filename" style="display:none"></div>
+      <div id="uploadError" class="upload-error" style="display:none"></div>
+    </div>
+    <div class="upload-footer">
+      <button class="pin-cancel" onclick="closeUploadModal()">Cancelar</button>
+      <button id="uploadSendBtn" class="pin-confirm" onclick="confirmUploadXLS()" disabled>▷ Enviar</button>
+    </div>
+  </div>
+</div>
+
 
 <script>
 // ─────────────────────────────────────────
