@@ -95,6 +95,8 @@ tailwind.config = {
   .toast{position:fixed;bottom:80px;right:24px;z-index:9999;padding:12px 20px;border-radius:6px;font-weight:600;font-size:12px;box-shadow:0 6px 24px rgba(0,0,0,0.18);transform:translateY(20px);opacity:0;transition:all 0.3s ease;letter-spacing:0.02em}
   .toast.show{transform:translateY(0);opacity:1}
   .row-selected{background-color:rgba(26,58,92,0.07)!important;outline:1px solid rgba(26,58,92,0.25)}
+  .row-bultos-mismatch{background-color:rgba(220,38,38,0.14)!important}
+  .row-bultos-mismatch:hover{background-color:rgba(220,38,38,0.22)!important}
   .cb-row{width:14px;height:14px;accent-color:#1a3a5c;cursor:pointer}
   #exportSelBtn{display:none}
   #exportSelBtn.visible{display:flex}
@@ -1489,11 +1491,26 @@ function renderTable(){
 
   const iId  = columnHeaders.findIndex(h=>/id bultos/i.test(h));
   const iF   = columnHeaders.findIndex(h=>isFechaCitaCol(h));
+  const iBultosCol     = columnHeaders.findIndex(h=>/^bultos$/i.test(h));
+  const iBultosDespCol = columnHeaders.findIndex(h=>/^bultos\s*desp/i.test(h));
 
   filteredData.forEach((row)=>{
     const globalIdx=allData.indexOf(row);
     const tr=document.createElement('tr');
     tr.className='zebra-row hover:bg-secondary-fixed-dim/20 transition-colors'+(selectedRows.has(globalIdx)?' row-selected':'');
+
+    // ── Alerta visual: BULTOS vs BULTOS DESPACHO no coinciden ──
+    if(iBultosCol>=0 && iBultosDespCol>=0){
+      const despRaw = row[iBultosDespCol];
+      const despTieneValor = despRaw!==undefined && despRaw!==null && String(despRaw).trim()!=='';
+      if(despTieneValor){
+        const vBultos = parseFloat(row[iBultosCol]);
+        const vDesp   = parseFloat(despRaw);
+        if(!isNaN(vBultos) && !isNaN(vDesp) && vBultos!==vDesp){
+          tr.classList.add('row-bultos-mismatch');
+        }
+      }
+    }
 
     // Checkbox
     const tdCb=document.createElement('td');
@@ -2219,7 +2236,7 @@ function renderEstatusTable(){
     // Filas de detalle por cliente (ocultas si colapsado)
     if(!collapsed){
       g.clientesArr.forEach(c=>{
-        const { label, cls } = fmtPct(c.pedRevisados, c.pedidos);
+        const { label, cls } = fmtPct(c.undRevisadas, c.cantidad);
         const key = estatusRowKey(g,c);
         const checked = estatusSelected.has(key);
         html += `<tr class="estatus-row hover:bg-secondary-fixed-dim/20${checked?' row-selected':''}">
@@ -2239,7 +2256,7 @@ function renderEstatusTable(){
 
     // Fila total de la fecha (clickeable para colapsar/expandir)
     const t = g.total;
-    const totalPct = fmtPct(t.pedRevisados, t.pedidos);
+    const totalPct = fmtPct(t.undRevisadas, t.cantidad);
     html += `<tr class="estatus-total-row cursor-pointer" onclick="toggleEstatusFecha('${g.sortKey}')">
       <td onclick="event.stopPropagation()"></td>
       <td colspan="2">
@@ -2386,7 +2403,7 @@ async function exportEstatus(onlySelected){
 
     exportGroups.forEach(g=>{
       g.clientesArr.forEach(c=>{
-        const { pct, label } = fmtPct(c.pedRevisados, c.pedidos);
+        const { pct, label } = fmtPct(c.undRevisadas, c.cantidad);
         const row = ws.addRow([g.display, c.nombre, c.pedidos, c.cantidad, c.pedRevisados, c.undRevisadas, c.pedPend, c.cantPend, '']);
         row.eachCell((cell, colNumber)=>{
           cell.font = { size:10, color:{ argb:'FF0F1923' } };
@@ -2402,7 +2419,7 @@ async function exportEstatus(onlySelected){
       });
 
       const t = g.total;
-      const tp = fmtPct(t.pedRevisados, t.pedidos);
+      const tp = fmtPct(t.undRevisadas, t.cantidad);
       const totalRow = ws.addRow(['Total '+g.display, '', t.pedidos, t.cantidad, t.pedRevisados, t.undRevisadas, t.pedPend, t.cantPend, '']);
       totalRow.eachCell((cell, colNumber)=>{
         cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb: TOTAL_BG } };
@@ -2419,7 +2436,7 @@ async function exportEstatus(onlySelected){
     });
 
     // Fila de Total General
-    const gp = fmtPct(grand.pedRevisados, grand.pedidos);
+    const gp = fmtPct(grand.undRevisadas, grand.cantidad);
     const grandRow = ws.addRow(['TOTAL GENERAL', '', grand.pedidos, grand.cantidad, grand.pedRevisados, grand.undRevisadas, grand.pedPend, grand.cantPend, gp.label]);
     grandRow.eachCell((cell, colNumber)=>{
       cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb: GRAND_BG } };
