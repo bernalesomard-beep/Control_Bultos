@@ -315,6 +315,10 @@ tailwind.config = {
         class="btn-outline-exec flex items-center gap-1 px-3 py-1.5">
         <span class="material-symbols-outlined text-[16px]">download</span>Descargar XLS
       </button>
+      <button onclick="openReporteModal()" title="Reporte por Fecha de Cita con formato de planilla"
+        class="btn-primary-exec flex items-center gap-1 px-3 py-1.5" style="background:#1a3a5c">
+        <span class="material-symbols-outlined text-[16px]">description</span>Descargar Reporte
+      </button>
     </div>
   </header>
 
@@ -1743,6 +1747,203 @@ async function postToSheet(action, data, callback){
   }
 }
 
+// ═══════════════════════════════════════════════════════
+// REPORTE DE BULTOS POR FECHA DE CITA (formato planilla)
+// Cabeceras fijas: FECHA PEDIDO | BPCS | DOCUMENTO | DESTINATARIO |
+//                  Fecha Cita | CANTIDAD | BULTOS  + fila de total de BULTOS
+// ═══════════════════════════════════════════════════════
+const REP_COLS = [
+  { head:'FECHA PEDIDO', match:/fecha\s*pedido/i,  width:15, type:'fecha' },
+  { head:'BPCS',         match:/bpcs/i,            width:11, type:'num'   },
+  { head:'DOCUMENTO',    match:/documento/i,       width:17, type:'num'   },
+  { head:'DESTINATARIO', match:/destinatario/i,    width:42, type:'texto' },
+  { head:'Fecha Cita',   match:/fecha\s*cita/i,    width:13, type:'fecha' },
+  { head:'CANTIDAD',     match:/cantidad/i,        width:12, type:'num'   },
+  { head:'BULTOS',       match:/^bultos$/i,        width:10, type:'num'   },
+];
+
+function repColIndexes(){
+  return REP_COLS.map(c => columnHeaders.findIndex(h => c.match.test(String(h).trim())));
+}
+
+function openReporteModal(){
+  if(!allData.length){ showToast('Sin datos cargados','error'); return; }
+  document.getElementById('repError').style.display='none';
+  document.getElementById('repSoloConBultos').checked = false;
+  document.getElementById('repFechaDesde').value = '';
+  document.getElementById('repFechaHasta').value = '';
+
+  // Poblar lista de Fechas de Cita existentes (descendente)
+  const iCita = columnHeaders.findIndex(h => isFechaCitaCol(h));
+  const sel = document.getElementById('repFechaLista');
+  sel.innerHTML = '<option value="">— Seleccione una fecha —</option>';
+  if(iCita >= 0){
+    const conteo = {};
+    allData.forEach(r=>{
+      const f = String(r[iCita]).replace(/\D/g,'').slice(0,8);
+      if(f.length === 8) conteo[f] = (conteo[f]||0) + 1;
+    });
+    Object.keys(conteo).sort().reverse().forEach(f=>{
+      const o = document.createElement('option');
+      o.value = f;
+      o.textContent = `${fmtDisplay(f)}  (${conteo[f]} pedidos)`;
+      sel.appendChild(o);
+    });
+  }
+  document.getElementById('reporteOverlay').style.display='flex';
+  updateRepResumen();
+}
+
+function closeReporteModal(){
+  document.getElementById('reporteOverlay').style.display='none';
+}
+
+function onRepFechaListaChange(){
+  const f = document.getElementById('repFechaLista').value;
+  if(f){
+    const iso = `${f.slice(0,4)}-${f.slice(4,6)}-${f.slice(6,8)}`;
+    document.getElementById('repFechaDesde').value = iso;
+    document.getElementById('repFechaHasta').value = iso;
+  }
+  updateRepResumen();
+}
+
+// Filas que cumplen el filtro del modal
+function getRepRows(){
+  const iCita = columnHeaders.findIndex(h => isFechaCitaCol(h));
+  const iBul  = columnHeaders.findIndex(h => /^bultos$/i.test(String(h).trim()));
+  const from  = document.getElementById('repFechaDesde').value.replace(/-/g,'');
+  const to    = document.getElementById('repFechaHasta').value.replace(/-/g,'');
+  const soloConBultos = document.getElementById('repSoloConBultos').checked;
+
+  return allData.filter(row=>{
+    if(iCita >= 0 && (from || to)){
+      const f = String(row[iCita]).replace(/\D/g,'').slice(0,8);
+      if(!f) return false;
+      if(from && f < from) return false;
+      if(to   && f > to)   return false;
+    }
+    if(soloConBultos && iBul >= 0){
+      const b = parseFloat(String(row[iBul]).replace(/[^\d.-]/g,''));
+      if(!(b > 0)) return false;
+    }
+    return true;
+  }).sort((a,b)=>{
+    const iBp = columnHeaders.findIndex(h=>/bpcs/i.test(h));
+    if(iBp < 0) return 0;
+    return (parseFloat(a[iBp])||0) - (parseFloat(b[iBp])||0);
+  });
+}
+
+function updateRepResumen(){
+  const box  = document.getElementById('repResumen');
+  const btn  = document.getElementById('repDownloadBtn');
+  const from = document.getElementById('repFechaDesde').value;
+  const to   = document.getElementById('repFechaHasta').value;
+
+  if(!from && !to){
+    box.innerHTML = 'Seleccione una Fecha de Cita (o un rango) para ver el resumen.';
+    btn.disabled = true;
+    return;
+  }
+  const rows = getRepRows();
+  const iCant = columnHeaders.findIndex(h=>/cantidad/i.test(h));
+  const iBul  = columnHeaders.findIndex(h=>/^bultos$/i.test(String(h).trim()));
+  const sum = (idx)=> idx<0 ? 0 : rows.reduce((a,r)=> a + (parseFloat(String(r[idx]).replace(/[^\d.-]/g,''))||0), 0);
+
+  btn.disabled = rows.length === 0;
+  box.innerHTML = rows.length
+    ? `<b>${rows.length}</b> pedidos &nbsp;•&nbsp; <b>${sum(iCant).toLocaleString('es-PE')}</b> unidades &nbsp;•&nbsp; <b>${sum(iBul).toLocaleString('es-PE')}</b> bultos`
+    : 'No hay pedidos para el filtro seleccionado.';
+}
+
+async function descargarReporte(){
+  const rows = getRepRows();
+  if(!rows.length){ showToast('No hay pedidos para el filtro seleccionado','error'); return; }
+  if(typeof ExcelJS === 'undefined'){ showToast('No se pudo cargar el motor de Excel (ExcelJS)','error'); return; }
+
+  try{
+    const idxs = repColIndexes();
+
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Control de Pedidos';
+    wb.created = new Date();
+    const ws = wb.addWorksheet('Reporte', { views:[{ state:'frozen', ySplit:1 }] });
+    ws.columns = REP_COLS.map(c=>({ width:c.width }));
+
+    const HEAD_BG = 'FF4472C4', WHITE = 'FFFFFFFF';
+    const thin = { style:'thin', color:{ argb:'FF8EA9DB' } };
+    const allBorders = { top:thin, left:thin, bottom:thin, right:thin };
+
+    // ── Cabecera ──
+    const headerRow = ws.addRow(REP_COLS.map(c=>c.head));
+    headerRow.eachCell(cell=>{
+      cell.fill = { type:'pattern', pattern:'solid', fgColor:{ argb:HEAD_BG } };
+      cell.font = { name:'Calibri', size:11, bold:true, color:{ argb:WHITE } };
+      cell.alignment = { horizontal:'center', vertical:'middle' };
+      cell.border = allBorders;
+    });
+    headerRow.height = 19;
+
+    // ── Detalle ──
+    let totalBultos = 0, totalCant = 0;
+    rows.forEach(r=>{
+      const vals = REP_COLS.map((c,k)=>{
+        const raw = idxs[k] >= 0 ? String(r[idxs[k]] ?? '').trim() : '';
+        if(c.type === 'fecha') return raw.replace(/\D/g,'').slice(0,8) || raw;  // YYYYMMDD como texto
+        if(c.type === 'num'){
+          const n = parseFloat(raw.replace(/[^\d.-]/g,''));
+          return isNaN(n) ? raw : n;
+        }
+        return raw;
+      });
+      totalCant   += (typeof vals[5] === 'number' ? vals[5] : 0);
+      totalBultos += (typeof vals[6] === 'number' ? vals[6] : 0);
+
+      const row = ws.addRow(vals);
+      row.eachCell((cell, col)=>{
+        cell.font = { name:'Calibri', size:11, color:{ argb:'FF000000' } };
+        cell.alignment = { horizontal:'center', vertical:'middle' };
+        cell.border = allBorders;
+        if(REP_COLS[col-1].type === 'fecha') cell.numFmt = '@';
+      });
+      row.height = 16;
+    });
+
+    // ── Fila de total (solo CANTIDAD / BULTOS, como en la planilla) ──
+    const totalRow = ws.addRow(['','','','','', totalCant, totalBultos]);
+    [6,7].forEach(col=>{
+      const cell = totalRow.getCell(col);
+      cell.font = { name:'Calibri', size:11, bold:true };
+      cell.alignment = { horizontal:'center', vertical:'middle' };
+      cell.border = allBorders;
+    });
+    totalRow.height = 17;
+
+    // ── Descarga ──
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const f = (document.getElementById('repFechaDesde').value || '').replace(/-/g,'');
+    const t = (document.getElementById('repFechaHasta').value || '').replace(/-/g,'');
+    const sufijo = (f && t && f === t) ? f : `${f||'inicio'}_${t||'fin'}`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `reporte_bultos_${sufijo}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
+
+    closeReporteModal();
+    showToast(`✓ Reporte descargado (${rows.length} pedidos / ${totalBultos} bultos)`,'success');
+  } catch(err){
+    const box = document.getElementById('repError');
+    box.textContent = 'Error al generar el reporte: ' + err.message;
+    box.style.display = 'block';
+    console.error(err);
+  }
+}
+
 // ─────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────
@@ -1794,6 +1995,59 @@ document.addEventListener('DOMContentLoaded', function(){
     <div class="upload-footer">
       <button class="pin-cancel" onclick="closeUploadModal()">Cancelar</button>
       <button id="uploadSendBtn" class="pin-confirm" onclick="confirmUploadXLS()" disabled>▷ Enviar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Modal Descargar Reporte (por Fecha de Cita) ── -->
+<div id="reporteOverlay" class="upload-overlay" style="display:none" onclick="if(event.target===this)closeReporteModal()">
+  <div class="upload-box" style="width:470px">
+    <div class="upload-header">
+      <span class="material-symbols-outlined">description</span>
+      <div>
+        <h2>Descargar Reporte de Bultos</h2>
+        <p>Filtre por Fecha de Cita y descargue el reporte con formato</p>
+      </div>
+      <button class="upload-close" onclick="closeReporteModal()">✕</button>
+    </div>
+    <div class="upload-body" style="padding:18px 20px">
+
+      <div style="margin-bottom:14px">
+        <label style="font-size:11px;font-weight:700;color:#5b6b7f;text-transform:uppercase;letter-spacing:.4px">Fecha de Cita disponible</label>
+        <select id="repFechaLista" onchange="onRepFechaListaChange()"
+          style="width:100%;margin-top:5px;border:1px solid #cbd5e1;border-radius:6px;padding:7px 9px;font-size:13px;background:#fff">
+          <option value="">— Seleccione una fecha —</option>
+        </select>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-bottom:14px">
+        <div style="flex:1">
+          <label style="font-size:11px;font-weight:700;color:#5b6b7f;text-transform:uppercase;letter-spacing:.4px">Desde</label>
+          <input id="repFechaDesde" type="date" onchange="updateRepResumen()"
+            style="width:100%;margin-top:5px;border:1px solid #cbd5e1;border-radius:6px;padding:6px 9px;font-size:13px">
+        </div>
+        <div style="flex:1">
+          <label style="font-size:11px;font-weight:700;color:#5b6b7f;text-transform:uppercase;letter-spacing:.4px">Hasta</label>
+          <input id="repFechaHasta" type="date" onchange="updateRepResumen()"
+            style="width:100%;margin-top:5px;border:1px solid #cbd5e1;border-radius:6px;padding:6px 9px;font-size:13px">
+        </div>
+      </div>
+
+      <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:#334155;margin-bottom:12px;cursor:pointer">
+        <input id="repSoloConBultos" type="checkbox" onchange="updateRepResumen()">
+        Incluir solo pedidos con bultos registrados
+      </label>
+
+      <div id="repResumen"
+        style="background:#f1f5f9;border:1px solid #dbe3ec;border-radius:8px;padding:10px 12px;font-size:12px;color:#0f2745">
+        Seleccione una fecha para ver el resumen.
+      </div>
+
+      <div id="repError" class="upload-error" style="display:none"></div>
+    </div>
+    <div class="upload-footer">
+      <button class="pin-cancel" onclick="closeReporteModal()">Cancelar</button>
+      <button id="repDownloadBtn" class="pin-confirm" onclick="descargarReporte()" disabled>⤓ Descargar</button>
     </div>
   </div>
 </div>
