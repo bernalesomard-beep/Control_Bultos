@@ -447,7 +447,7 @@ tailwind.config = {
 
     <!-- Tabla -->
     <div class="tabla-container overflow-hidden">
-      <div class="overflow-x-auto overflow-y-auto" style="max-height:492px;min-height:120px;">
+      <div class="overflow-x-auto overflow-y-auto" style="max-height:720px;min-height:120px;">
         <table class="w-full text-left border-collapse" id="mainTable">
           <thead>
             <tr id="tableHeader" class="sticky-header"></tr>
@@ -708,7 +708,7 @@ const WEBAPP_URL = 'https://script.google.com/macros/s/AKfycby__r1l16nGVaY5H_Zog
 // que no formaban parte del esquema original. Se agregan aquí como columnas ocultas de solo-passthrough
 // para que el frontend y el backend lean/escriban las 15 columnas reales en el orden correcto y no se
 // pisen ni se pierdan datos de ESTATUS DESPACHO / REGISTRO DESPACHO (antes quedaban fuera de rango).
-const SHEET_COLS   = ['ID BULTOS','FECHA PEDIDO','BPCS','DOCUMENTO','DESTINATARIO','FECHA CITA','CANTIDAD','BULTOS','USUARIO','REGISTRO','ESTATUS','ESTATUS VALIDADO','BULTOS DESP','ESTATUS DESPACHO','REGISTRO DESPACHO'];
+const SHEET_COLS   = ['ID BULTOS','FECHA PEDIDO','BPCS','DOCUMENTO','DESTINATARIO','FECHA CITA','CANTIDAD','BULTOS','USUARIO','REGISTRO','ESTATUS','ESTATUS VALIDADO','BULTOS DESP','ESTATUS DESPACHO','VALIDADO POR','REGISTRO DESPACHO','REGISTRADO POR'];
 const HIDDEN_PASSTHROUGH_COLS = ['ESTATUS','ESTATUS VALIDADO']; // no se muestran en la tabla, pero se conservan al guardar
 
 // Valor por defecto para el estatus de despacho cuando la celda llega vacía
@@ -909,7 +909,7 @@ function renderHeaders(){
     if(/id bultos/i.test(h)) return; // ocultar
     if(/^registro$/i.test(h)) return; // ocultar: duplica la info de STATUS
     if(HIDDEN_PASSTHROUGH_COLS.some(hc=>hc.toUpperCase()===h.toUpperCase())) return; // ocultar: columnas legacy del Sheet
-    const isDespachoCol = /^bultos\s*desp/i.test(h) || /^estatus\s*despacho$/i.test(h) || /^registro\s*despacho$/i.test(h);
+    const isDespachoCol = /^bultos\s*desp/i.test(h) || /^estatus\s*despacho$/i.test(h) || /^registro\s*despacho$/i.test(h) || /^validado\s*por$/i.test(h) || /^registrado\s*por$/i.test(h);
     const th=document.createElement('th');
     th.className='col-header-cell px-4 py-2.5 text-[10px] font-bold uppercase tracking-widest whitespace-nowrap text-white';
     if(isDespachoCol) th.style.background='#16a34a';
@@ -1556,11 +1556,28 @@ function renderTable(){
           inp.style.borderColor='#c4cdd9'; inp.style.boxShadow='none';
           const v=inp.value.trim();
           if(v===String(cell||'')) return; // sin cambios
-          row[ci]=v;
-          const gi=allData.indexOf(row);
-          if(gi>=0) allData[gi][ci]=v;
-          postToSheet('upsertRow',{ row:[...row] });
-          showToast('Bultos despachados actualizados','success');
+          if(despModalOpen) return;
+          const iVal=columnHeaders.findIndex(h=>/^validado\s*por$/i.test(h));
+          const iRegPor=columnHeaders.findIndex(h=>/^registrado\s*por$/i.test(h));
+          if(iVal<0 || iRegPor<0){
+            inp.value=cell||'';
+            showToast('Faltan las columnas VALIDADO POR / REGISTRADO POR en el Sheet','error');
+            return;
+          }
+          const iBp=columnHeaders.findIndex(h=>/^bpcs$/i.test(h));
+          const iDest=columnHeaders.findIndex(h=>/^destinatario$/i.test(h));
+          openDespModal({
+            info:`BPCS ${iBp>=0?row[iBp]:''} · ${iDest>=0?row[iDest]:''} · Bultos desp: ${v||'(vacío)'}`,
+            onConfirm: async (validado, registrado)=>{
+              const oldV=row[ci], oldVal=row[iVal], oldReg=row[iRegPor];
+              row[ci]=v; row[iVal]=validado; row[iRegPor]=registrado;
+              const ok = await safeUpsert(row,[ci,iVal,iRegPor]);
+              if(!ok){ row[ci]=oldV; row[iVal]=oldVal; row[iRegPor]=oldReg; }
+              renderTable();
+              if(ok) showToast('Bultos despachados guardados','success');
+            },
+            onCancel: ()=>{ inp.value=cell||''; showToast('Sin guardar: faltan VALIDADO POR y REGISTRADO POR','info'); }
+          });
         });
         inp.addEventListener('keydown',e=>{ if(e.key==='Enter') inp.blur(); });
         td.appendChild(inp);
@@ -1577,23 +1594,25 @@ function renderTable(){
           if(opt===curVal) o.selected=true;
           sel.appendChild(o);
         });
-        sel.addEventListener('change',()=>{
+        sel.addEventListener('change',async ()=>{
           const v=sel.value;
-          row[ci]=v;
-          const gi=allData.indexOf(row);
           const iReg=columnHeaders.findIndex(h=>/^registro\s*despacho$/i.test(h));
           const now=new Date();
           const stamp=now.toLocaleDateString('es-PE')+' '+now.toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+          const oldV=row[ci], oldReg=iReg>=0?row[iReg]:null;
+          row[ci]=v;
           if(iReg>=0) row[iReg]=stamp;
-          if(gi>=0){
-            allData[gi][ci]=v;
-            if(iReg>=0) allData[gi][iReg]=stamp;
-          }
-          postToSheet('upsertRow',{ row:[...row] });
+          const changed=iReg>=0?[ci,iReg]:[ci];
+          const ok = await safeUpsert(row,changed);
+          if(!ok){ row[ci]=oldV; if(iReg>=0) row[iReg]=oldReg; }
           renderTable();
-          showToast(`Estatus despacho → ${v}`,'success');
+          if(ok) showToast(`Estatus despacho → ${v}`,'success');
         });
         td.appendChild(sel);
+      } else if(/^validado\s*por$/i.test(headerName) || /^registrado\s*por$/i.test(headerName)){
+        // ── VALIDADO POR / REGISTRADO POR: solo lectura, se llenan al guardar BULTOS DESP ──
+        td.className='px-4 py-2.5 text-[12px] font-semibold text-on-surface-variant whitespace-nowrap';
+        td.textContent=cell||'—';
       } else if(isRegistroDespacho){
         // ── REGISTRO DESPACHO: solo lectura, se autocompleta al cambiar el estatus ──
         td.className='px-4 py-2.5 font-mono text-[11px] text-on-surface-variant whitespace-nowrap';
@@ -1646,15 +1665,14 @@ function editCell(td,row,ci,isFecha){
   inp.value=disp==='—'?'':disp;
   if(isFecha) inp.placeholder='dd/mm/yyyy';
   td.appendChild(inp); inp.focus(); inp.select();
-  const save=()=>{
+  const save=async ()=>{
     let v=inp.value.trim();
+    const keyRow=[...row]; // valores originales para ubicar la fila en el Sheet
     row[ci]=isFecha&&v?fmtStorage(v):v;
-    const gi=allData.indexOf(row);
-    if(gi>=0) allData[gi][ci]=row[ci];
+    const ok = await safeUpsert(row,[ci],keyRow);
+    if(!ok) row[ci]=orig;
     updateKPIs(); renderTable();
-    showToast('Celda actualizada','success');
-    // Sincronizar con el Sheet vía Web App
-    postToSheet('upsertRow', { row: [...row] });
+    if(ok) showToast('Celda actualizada','success');
   };
   inp.addEventListener('blur',save);
   inp.addEventListener('keydown',e=>{
@@ -2223,26 +2241,27 @@ function editBultosCell(td){
   });
 }
 
-function saveBultosEdits(){
+async function saveBultosEdits(){
   if(Object.keys(bultosEdits).length===0){
     showToast('No hay cambios para guardar','info');
     return;
   }
   const iB = columnHeaders.findIndex(h=>/^bultos$/i.test(h));
-  let saved=0;
-  Object.entries(bultosEdits).forEach(([ridx, val])=>{
+  let saved=0, failed=0;
+  for(const [ridx, val] of Object.entries(bultosEdits)){
     const ri = parseInt(ridx);
-    if(allData[ri]){
-      allData[ri][iB] = val;
-      // Sincronizar con Sheet
-      postToSheet('upsertRow', { row: [...allData[ri]] });
-      saved++;
-    }
-  });
+    const row = allData[ri];
+    if(!row) continue;
+    const old = row[iB];
+    row[iB] = val;
+    const ok = await safeUpsert(row,[iB]);
+    if(ok) saved++; else { row[iB]=old; failed++; }
+  }
   updateKPIs();
   cancelBultosEdit();
   renderTable();
-  showToast(`${saved} fila(s) guardadas correctamente`, 'success');
+  if(failed) showToast(`${saved} guardada(s), ${failed} NO se guardaron (revisa conexión)`, 'error');
+  else showToast(`${saved} fila(s) guardadas correctamente`, 'success');
 }
 
 // Parche: renderTable debe marcar las td de BULTOS con data-bultos y data-rowidx
@@ -2969,6 +2988,109 @@ function exportOtifFiltered(){
   } catch(err){
     showToast('Error al exportar: ' + err.message,'error');
     console.error(err);
+  }
+}
+</script>
+<!-- ── Modal VALIDADO POR / REGISTRADO POR ── -->
+<div id="despOverlay" class="pin-overlay" style="display:none" onclick="if(event.target===this)cancelDespModal()">
+  <div class="pin-box">
+    <div style="font-size:36px;margin-bottom:8px">📝</div>
+    <h2>Confirmar bultos despachados</h2>
+    <p id="despInfo" style="margin-bottom:12px"></p>
+    <input id="despValidado" class="pin-input" type="text" maxlength="40" placeholder="VALIDADO POR" autocomplete="off" style="margin-bottom:8px"
+      onkeydown="if(event.key==='Enter')document.getElementById('despRegistrado').focus()">
+    <input id="despRegistrado" class="pin-input" type="text" maxlength="40" placeholder="REGISTRADO POR" autocomplete="off"
+      onkeydown="if(event.key==='Enter')confirmDespModal()">
+    <div id="despError" class="pin-error"></div>
+    <div class="pin-btns">
+      <button class="pin-cancel" onclick="cancelDespModal()">Cancelar</button>
+      <button class="pin-confirm" onclick="confirmDespModal()">Guardar</button>
+    </div>
+  </div>
+</div>
+<script>
+// ─────────────────────────────────────────
+// MODAL: VALIDADO POR + REGISTRADO POR (obligatorios para guardar BULTOS DESP)
+// ─────────────────────────────────────────
+let despModalOpen=false, _despCb=null;
+function openDespModal(cfg){
+  _despCb=cfg; despModalOpen=true;
+  document.getElementById('despInfo').textContent=cfg.info||'';
+  document.getElementById('despValidado').value='';
+  document.getElementById('despRegistrado').value='';
+  document.getElementById('despError').textContent='';
+  document.getElementById('despOverlay').style.display='flex';
+  setTimeout(()=>document.getElementById('despValidado').focus(),60);
+}
+function closeDespModal(){
+  document.getElementById('despOverlay').style.display='none';
+  despModalOpen=false;
+}
+function cancelDespModal(){
+  const cb=_despCb; _despCb=null; closeDespModal();
+  if(cb && cb.onCancel) cb.onCancel();
+}
+function confirmDespModal(){
+  const v=document.getElementById('despValidado').value.trim().toUpperCase();
+  const r=document.getElementById('despRegistrado').value.trim().toUpperCase();
+  if(!v || !r){
+    document.getElementById('despError').textContent='Debes completar VALIDADO POR y REGISTRADO POR.';
+    (!v?document.getElementById('despValidado'):document.getElementById('despRegistrado')).focus();
+    return;
+  }
+  const cb=_despCb; _despCb=null; closeDespModal();
+  if(cb && cb.onConfirm) cb.onConfirm(v,r);
+}
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && despModalOpen) cancelDespModal(); });
+
+// ─────────────────────────────────────────
+// GUARDADO SEGURO
+// Antes de escribir, trae la fila ACTUAL del Sheet y conserva sus valores en todas
+// las columnas que NO se están modificando (BULTOS, USUARIO, REGISTRO, ESTATUS, etc.).
+// Así, aunque la ventana esté desactualizada, no se pisan los datos de otros usuarios.
+// Si no se puede leer el Sheet, NO guarda (para no sobrescribir con datos viejos).
+// ─────────────────────────────────────────
+async function safeUpsert(row, changedCols, keyRow){
+  keyRow = keyRow || row;
+  const iId  = columnHeaders.findIndex(h=>/id bultos/i.test(h));
+  const iBp  = columnHeaders.findIndex(h=>/^bpcs$/i.test(h));
+  const iDoc = columnHeaders.findIndex(h=>/^documento$/i.test(h));
+  try{
+    const controller=new AbortController();
+    const to=setTimeout(()=>controller.abort(),15000);
+    let resp;
+    try{ resp=await fetch(WEBAPP_URL+'?action=json&t='+Date.now(),{cache:'no-store',signal:controller.signal}); }
+    finally{ clearTimeout(to); }
+    if(!resp.ok) throw new Error('HTTP '+resp.status);
+    const json=await resp.json();
+    if(!json.ok) throw new Error(json.error||'WebApp error');
+    const fresh=(json.data||[]).map(o=>columnHeaders.map(h=>String(o[h]??'').trim()));
+
+    let f=-1;
+    const kId=iId>=0?String(keyRow[iId]??'').trim():'';
+    if(iId>=0 && kId!=='' && iBp>=0)
+      f=fresh.findIndex(r=>r[iId]===kId && r[iBp]===String(keyRow[iBp]).trim());
+    if(f<0 && iBp>=0 && iDoc>=0)
+      f=fresh.findIndex(r=>r[iBp]===String(keyRow[iBp]).trim() && r[iDoc]===String(keyRow[iDoc]).trim());
+    if(f<0){
+      showToast('No se encontró la fila en el Sheet. Presiona Actualizar e inténtalo de nuevo.','error');
+      return false;
+    }
+    // Conservar lo más reciente del Sheet en las columnas no modificadas
+    let refreshed=0;
+    columnHeaders.forEach((h,i)=>{
+      if(changedCols.includes(i)) return;
+      const fv=fresh[f][i];
+      if(i===iId && fv==='') return;          // no borrar el correlativo local
+      if(String(row[i]??'')!==fv){ row[i]=fv; refreshed++; }
+    });
+    await postToSheet('upsertRow',{ row:[...row], changed: changedCols.map(i=>columnHeaders[i]) });
+    if(refreshed) showToast('Guardado. Se detectaron datos más recientes en el Sheet y se conservaron.','info');
+    return true;
+  }catch(e){
+    const msg=(e&&e.name==='AbortError')?'Tiempo de espera agotado':e.message;
+    showToast('NO se guardó: '+msg+'. Intenta de nuevo.','error');
+    return false;
   }
 }
 </script>
