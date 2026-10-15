@@ -795,11 +795,26 @@ function loadFromCache(){
     return true;
   }catch(e){ return false; }
 }
+let _cbJsonDone=false;
+async function loadCsvFast(){
+  try{
+    const r=await fetch(SHEET_CSV_URL+'&_='+Date.now(),{cache:'no-store'});
+    if(!r.ok) return false;
+    const txt=await r.text();
+    const head=(txt.split('\n')[0]||'');
+    if(!/bpcs/i.test(head)||!/documento/i.test(head)) return false;   // no es la hoja esperada
+    if(_cbJsonDone) return true;                                       // el Apps Script ya respondió: no pisarlo
+    parseCSV(txt);
+    const el=document.getElementById('syncTime'); if(el) el.textContent='CSV publicado · actualizando…';
+    return true;
+  }catch(e){ console.warn('[CSV] falló:',e.message); return false; }
+}
 async function loadSheet(){
-  if(!allData.length) showOverlay(true);
+  _cbJsonDone=false;
+  if(!allData.length){ showOverlay(true); loadCsvFast().then(ok=>{ if(ok) showOverlay(false); }); }
   try{
     const controller = new AbortController();
-    const timeoutId = setTimeout(()=>controller.abort(), 15000); // 15s: nunca se queda colgado
+    const timeoutId = setTimeout(()=>controller.abort(), 25000); // 25s: nunca se queda colgado
     let resp;
     try{
       resp = await fetch(WEBAPP_URL + '?action=json&t=' + Date.now(), { cache: 'no-store', signal: controller.signal });
@@ -809,16 +824,20 @@ async function loadSheet(){
     if(!resp.ok) throw new Error('HTTP ' + resp.status);
     const json = await resp.json();
     if(!json.ok) throw new Error(json.error || 'WebApp error');
+    _cbJsonDone=true;
     parseJSON(json.data);
     try{ localStorage.setItem(CB_CACHE_KEY, JSON.stringify({ts:Date.now(),data:json.data})); }catch(e){}
     const now = new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
     document.getElementById('syncTime').textContent = `Actualizado ${now}`;
     showToast(`${allData.length} registros cargados`, 'success');
   } catch(e){
-    const msg = (e && e.name === 'AbortError') ? 'Tiempo de espera agotado (15s) al conectar con el Sheet' : ('Error al conectar con el Sheet: ' + e.message);
+    const msg = (e && e.name === 'AbortError') ? 'Tiempo de espera agotado (25s) al conectar con el Sheet' : ('Error al conectar con el Sheet: ' + e.message);
     console.warn('[loadSheet] Error:', msg);
     showToast(msg, 'error');
-    if(!allData.length) loadDemoData(); // si ya hay datos reales en pantalla, no se reemplazan por demo
+    if(!allData.length){
+      if(await loadCsvFast()) showToast('Sin conexión con el Apps Script: se muestran datos del CSV publicado (pueden tener minutos de retraso). Guardar cambios puede fallar.','info');
+      else loadDemoData();
+    } // si ya hay datos reales en pantalla, no se reemplazan por demo
   }
   showOverlay(false);
 }
