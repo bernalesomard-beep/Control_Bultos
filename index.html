@@ -272,7 +272,7 @@ tailwind.config = {
         <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-outline">
           <span class="material-symbols-outlined text-[18px]">search</span>
         </span>
-        <input id="globalSearch" oninput="applyFilters()" type="text" placeholder="Buscar BPCS, Documento, Destinatario..."
+        <input id="globalSearch" oninput="applyFiltersDebounced()" type="text" placeholder="Buscar BPCS, Documento, Destinatario..."
           class="border border-outline-variant rounded-md pl-9 pr-4 py-1.5 text-[13px] w-64 md:w-80">
       </div>
     </div>
@@ -415,15 +415,15 @@ tailwind.config = {
       </div>
       <div class="flex flex-col gap-1 min-w-[120px]">
         <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">BPCS</label>
-        <input id="filterBpcs" oninput="applyFilters()" type="text" placeholder="Ej: 967310..." class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-[13px] focus:ring-1 focus:ring-primary focus:outline-none">
+        <input id="filterBpcs" oninput="applyFiltersDebounced()" type="text" placeholder="Ej: 967310..." class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-[13px] focus:ring-1 focus:ring-primary focus:outline-none">
       </div>
       <div class="flex flex-col gap-1 min-w-[130px]">
         <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Documento</label>
-        <input id="filterDoc" oninput="applyFilters()" type="text" placeholder="Ej: 4709456..." class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-[13px] focus:ring-1 focus:ring-primary focus:outline-none">
+        <input id="filterDoc" oninput="applyFiltersDebounced()" type="text" placeholder="Ej: 4709456..." class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-[13px] focus:ring-1 focus:ring-primary focus:outline-none">
       </div>
       <div class="flex flex-col gap-1 min-w-[160px]">
         <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Destinatario</label>
-        <input id="filterDest" oninput="applyFilters()" type="text" placeholder="Nombre destinatario..." class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-[13px] focus:ring-1 focus:ring-primary focus:outline-none">
+        <input id="filterDest" oninput="applyFiltersDebounced()" type="text" placeholder="Nombre destinatario..." class="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-[13px] focus:ring-1 focus:ring-primary focus:outline-none">
       </div>
       <div class="flex flex-col gap-1">
         <label class="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Mes</label>
@@ -785,8 +785,18 @@ const STATUS_STYLE = {
 // CARGA AUTOMÁTICA desde Sheet
 // Lee SIEMPRE desde WebApp ?action=json (tiempo real, sin caché de Google)
 // ─────────────────────────────────────────
+const CB_CACHE_KEY='cb_cache_v1';
+function loadFromCache(){
+  try{
+    const c=JSON.parse(localStorage.getItem(CB_CACHE_KEY)||'null');
+    if(!c||!Array.isArray(c.data)||!c.data.length) return false;
+    parseJSON(c.data);
+    document.getElementById('syncTime').textContent='Datos guardados · actualizando…';
+    return true;
+  }catch(e){ return false; }
+}
 async function loadSheet(){
-  showOverlay(true);
+  if(!allData.length) showOverlay(true);
   try{
     const controller = new AbortController();
     const timeoutId = setTimeout(()=>controller.abort(), 15000); // 15s: nunca se queda colgado
@@ -800,6 +810,7 @@ async function loadSheet(){
     const json = await resp.json();
     if(!json.ok) throw new Error(json.error || 'WebApp error');
     parseJSON(json.data);
+    try{ localStorage.setItem(CB_CACHE_KEY, JSON.stringify({ts:Date.now(),data:json.data})); }catch(e){}
     const now = new Date().toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'});
     document.getElementById('syncTime').textContent = `Actualizado ${now}`;
     showToast(`${allData.length} registros cargados`, 'success');
@@ -807,7 +818,7 @@ async function loadSheet(){
     const msg = (e && e.name === 'AbortError') ? 'Tiempo de espera agotado (15s) al conectar con el Sheet' : ('Error al conectar con el Sheet: ' + e.message);
     console.warn('[loadSheet] Error:', msg);
     showToast(msg, 'error');
-    loadDemoData();
+    if(!allData.length) loadDemoData(); // si ya hay datos reales en pantalla, no se reemplazan por demo
   }
   showOverlay(false);
 }
@@ -1390,6 +1401,7 @@ function downloadTemplate(){
 // ─────────────────────────────────────────
 let chartData = [];
 
+let _fT; function applyFiltersDebounced(){ clearTimeout(_fT); _fT=setTimeout(applyFilters,200); }
 function applyFilters(){
   const g    = document.getElementById('globalSearch').value.toLowerCase();
   const bpcs = document.getElementById('filterBpcs').value.toLowerCase();
@@ -1509,8 +1521,10 @@ function renderTable(){
   const iBultosCol     = columnHeaders.findIndex(h=>/^bultos$/i.test(h));
   const iBultosDespCol = columnHeaders.findIndex(h=>/^bultos\s*desp/i.test(h));
 
-  filteredData.forEach((row)=>{
-    const globalIdx=allData.indexOf(row);
+  if(!_cbKeep) _cbLim=CB_PAGE; _cbKeep=false;
+  const _idxMap=new Map(); allData.forEach((r,i)=>_idxMap.set(r,i));
+  filteredData.slice(0,_cbLim).forEach((row)=>{
+    const globalIdx=_idxMap.get(row);
     const tr=document.createElement('tr');
     tr.className='zebra-row hover:bg-secondary-fixed-dim/20 transition-colors'+(selectedRows.has(globalIdx)?' row-selected':'');
 
@@ -1658,8 +1672,15 @@ function renderTable(){
     tbody.appendChild(tr);
   });
 
+  if(filteredData.length>_cbLim){
+    tbody.insertAdjacentHTML('beforeend',`<tr id="more-bultos"><td colspan="${columnHeaders.length+1}" class="text-center py-3 text-[12px] text-on-surface-variant">Mostrando ${_cbLim.toLocaleString('es-PE')} de ${filteredData.length.toLocaleString('es-PE')} · <button class="underline font-semibold" onclick="cbMore()">Mostrar más</button></td></tr>`);
+    if(!window._cbObs) window._cbObs=new IntersectionObserver(es=>es.forEach(e=>{ if(e.isIntersecting){ window._cbObs.unobserve(e.target); cbMore(); } }),{rootMargin:'300px'});
+    const _m=document.getElementById('more-bultos'); if(_m) window._cbObs.observe(_m);
+  }
   document.getElementById('totalEntries').textContent=filteredData.length.toLocaleString('es-PE');
 }
+const CB_PAGE=200; let _cbLim=CB_PAGE, _cbKeep=false;
+function cbMore(){ _cbLim+=CB_PAGE; _cbKeep=true; renderTable(); }
 
 // ─────────────────────────────────────────
 // EDICIÓN INLINE
@@ -1980,6 +2001,7 @@ document.addEventListener('DOMContentLoaded', function(){
   // Garantizar estado inicial de secciones
   document.getElementById('sectionBultos').classList.add('sec-visible');
   document.getElementById('sectionOtif').classList.remove('sec-visible');
+  loadFromCache();
   loadSheet();
 });
 </script>
